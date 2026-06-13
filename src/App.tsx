@@ -31,6 +31,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory } from "./types";
 import { ProspectDeepView } from "./components/ProspectDeepView";
 import { OceanoAzulEcosystem } from "./components/OceanoAzulEcosystem";
+import { BlueOceanScanner } from "./components/BlueOceanScanner";
 
 // Firebase and Auth imports
 import { auth, db, handleFirestoreError, OperationType } from "./firebase";
@@ -1757,56 +1758,18 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Part B: On-Demand Micro-SaaS alarms */}
+                  {/* Part B: Blue Ocean Scanner — oportunidades rankeadas */}
                   <div className="bg-[#0f0f0f] border border-border-grid rounded-lg p-5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-grid pb-3 mb-4 gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-syne font-extrabold text-white text-base">Alertas de Nuevos Productos & Micro-SaaS</h3>
-                          <span className="bg-orange-500/10 border border-orange-500/30 text-accent text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded animate-pulse">Semáforo de Brechas Activo</span>
+                          <h3 className="font-syne font-extrabold text-white text-base">Oportunidades Micro-SaaS — Océano Azul</h3>
+                          <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded animate-pulse">Scanner Activo</span>
                         </div>
-                        <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans font-medium">Brechas de mercado registradas por dolores recurrentes para desarrollo satélite bajo demanda.</p>
+                        <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans">Dolores detectados en vacantes que no tienen software todavía — rankeados por Índice de Impacto.</p>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {alertaNuevosProductos.map((alerta, aIdx) => (
-                        <div key={aIdx} className="bg-[#0b0c10] border border-l-4 border-l-accent border-border-grid p-4 rounded-md space-y-3 relative overflow-hidden flex flex-col justify-between">
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[9px] text-[#7a8899] font-mono select-none uppercase tracking-wider">⚠ Alerta Inteligente</span>
-                              <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
-                                alerta.potencial_micro_saas === "alto" 
-                                  ? "bg-emerald-950 text-emerald-400 border border-emerald-900" 
-                                  : "bg-[#151515] text-[#7a8899] border border-border-grid/60"
-                              }`}>
-                                Potencial {alerta.potencial_micro_saas}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <h4 className="text-[11px] font-sans font-extrabold text-white uppercase tracking-wider">
-                                Dolor No Cubierto
-                              </h4>
-                              <p className="text-xs text-[#a4b3c6] leading-relaxed italic">"{alerta.dolor_no_cubierto}"</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3 pt-2 text-[11px]">
-                            <div className="bg-[#111] p-3 rounded border border-border-grid/50 space-y-1">
-                              <div className="text-[9px] text-accent font-extrabold uppercase tracking-widest">SaaS Requerido</div>
-                              <p className="text-white leading-relaxed">{alerta.herramienta_necesaria_demandada}</p>
-                            </div>
-                            <div className="bg-[#111] p-3 rounded border border-border-grid/50 space-y-1">
-                              <div className="text-[9px] text-[#00c97a] font-extrabold uppercase tracking-widest">Oportunidad del Mercado</div>
-                              <p className="text-white leading-relaxed">{alerta.justificacion_oportunidad}</p>
-                            </div>
-                          </div>
-
-                        </div>
-                      ))}
-                    </div>
+                    <BlueOceanScanner alertas={alertaNuevosProductos} />
                   </div>
 
                 </div>

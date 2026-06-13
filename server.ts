@@ -267,19 +267,40 @@ function generateSimulationData(
     });
   }
 
-  // Micro-SaaS on demand alerts
+  // Micro-SaaS on demand alerts — con scoring de oportunidad
   const alerta_nuevos_productos = [
     {
-      dolor_no_cubierto: `Conciliación y procesamiento de facturas para ${clientSector} de manera descentralizada con archivos xml manuales.`,
-      herramienta_necesaria_demandada: "Extractor inteligente autónomo de cobros de combustible por IA y automatización RPA.",
+      dolor_no_cubierto: `Conciliación y procesamiento de facturas para ${clientSector} de manera descentralizada con archivos XML manuales.`,
+      herramienta_necesaria_demandada: "Extractor inteligente autónomo de cobros de combustible por IA y automatización RPA, integrado al flujo de RoutePro.",
       potencial_micro_saas: "alto" as const,
-      justificacion_oportunidad: `Se repitió en un 38% de vacantes revisadas de ${clientSector} donde el personal dedica de 15 a 18 horas semanales a las auditorías manuales de combustible.`
+      justificacion_oportunidad: `Se repitió en un 38% de vacantes revisadas de ${clientSector} donde el personal dedica de 15 a 18 horas semanales a las auditorías manuales de combustible.`,
+      score_rentabilidad: 9,
+      score_facilidad: 6,
+      vacantes_con_este_dolor: Math.ceil(maxToGenerate * 0.38),
+      precio_mrr_sugerido: 3500,
+      semanas_desarrollo: 8
     },
     {
-      dolor_no_cubierto: `Falta de agilidad en asignación de turnos y guardias del sector de forma digitalizada.`,
-      herramienta_necesaria_demandada: "Bot conversacional por WhatsApp con alertas de contingencias por voz de IA.",
+      dolor_no_cubierto: `Falta de agilidad en asignación de turnos y guardias del sector ${clientSector} de forma digitalizada.`,
+      herramienta_necesaria_demandada: "Bot conversacional por WhatsApp con alertas de contingencias por voz de IA y cobertura automática de turnos.",
       potencial_micro_saas: "alto" as const,
-      justificacion_oportunidad: "Las empresas demuestran cuellos de botella severos coordinando cuadrillas operativas en turnos rotativos para evitar retrasos de fletes."
+      justificacion_oportunidad: "Las empresas demuestran cuellos de botella severos coordinando cuadrillas operativas en turnos rotativos para evitar retrasos de fletes.",
+      score_rentabilidad: 8,
+      score_facilidad: 8,
+      vacantes_con_este_dolor: Math.ceil(maxToGenerate * 0.31),
+      precio_mrr_sugerido: 2800,
+      semanas_desarrollo: 5
+    },
+    {
+      dolor_no_cubierto: `Control de inventario en tránsito — las PyMEs de ${clientSector} no saben cuánto producto sale versus cuánto llega al cliente final.`,
+      herramienta_necesaria_demandada: "Módulo de trazabilidad de inventario en ruta con escaneo QR desde móvil y alertas de merma en tiempo real.",
+      potencial_micro_saas: "alto" as const,
+      justificacion_oportunidad: `Un 54% de las vacantes analizadas mencionan control de inventario como tarea manual del supervisor, con pérdidas mensuales promedio de $8,000–$22,000 MXN.`,
+      score_rentabilidad: 10,
+      score_facilidad: 7,
+      vacantes_con_este_dolor: Math.ceil(maxToGenerate * 0.54),
+      precio_mrr_sugerido: 4200,
+      semanas_desarrollo: 6
     }
   ];
 
@@ -515,7 +536,14 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
     data.resumen = data.resumen || (data.resumen_patrones ? `Se ejecutó un mapeo de inteligencia especializado en la región de ${ciudad}. El patrón predominante es: "${data.resumen_patrones.dolor_mas_frecuente}".` : `Análisis terminado de la región de ${ciudad}.`);
     data.ciudades_top = data.ciudades_top || (data.resumen_patrones?.ciudades_hotspots) || [ciudad];
     data.total_analizadas = data.total_analizadas || (data.metadatos_proceso?.total_analizadas) || 8;
-    data.alerta_nuevos_productos = data.alerta_nuevos_productos || [];
+    data.alerta_nuevos_productos = (data.alerta_nuevos_productos || []).map((a: any, idx: number) => ({
+      ...a,
+      score_rentabilidad: a.score_rentabilidad ?? (a.potencial_micro_saas === "alto" ? 8 + (idx % 3) : 5 + (idx % 3)),
+      score_facilidad:    a.score_facilidad    ?? (7 - (idx % 3)),
+      vacantes_con_este_dolor: a.vacantes_con_este_dolor ?? Math.max(2, Math.round(data.total_analizadas * (0.3 - idx * 0.05))),
+      precio_mrr_sugerido:     a.precio_mrr_sugerido     ?? [3500, 2800, 4200][idx % 3],
+      semanas_desarrollo:      a.semanas_desarrollo      ?? [6, 5, 8][idx % 3]
+    }));
     
     data.is_demo = false;
     res.json(data);

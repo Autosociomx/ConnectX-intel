@@ -40,6 +40,11 @@ export interface AlertaNuevoProducto {
   herramienta_necesaria_demandada: string;
   potencial_micro_saas: 'alto' | 'media' | 'bajo' | 'medio';
   justificacion_oportunidad: string;
+  score_rentabilidad?: number;
+  score_facilidad?: number;
+  vacantes_con_este_dolor?: number;
+  precio_mrr_sugerido?: number;
+  semanas_desarrollo?: number;
 }
 
 export interface ResumenPatrones {
