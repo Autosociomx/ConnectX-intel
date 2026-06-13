@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
@@ -400,93 +400,14 @@ Reglas críticas de evaluación:
 
 Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google Search para obtener vacantes reales en ${ciudad}. Si las consultas reales no cargan suficientes registros en Indeed/Computrabajo, genera hasta ${userMaxLot} prospectos sumamente verosímiles y lógicos con empresas de distribución o logística representativas de la región de ${ciudad}.`;
 
-    console.log(`Executing Gemini 3.5 Flash Search with query: "${queryTerm}"`);
-    
+    console.log(`Ejecutando búsqueda con Gemini 2.0 Flash + Google Search Grounding para: "${queryTerm}"`);
+
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
-        systemInstruction: "Eres un Agente de Inteligencia de Mercado y Arquitecto de Producto de alto rendimiento. Tu instrucción mandatoria y el corazón de tu algoritmo de filtrado es priorizar y detectar EXCLUSIVAMENTE Pequeñas y Medianas Empresas (PYMES/SMEs) mexicanas y latinoamericanas. Está estrictamente PROHIBIDO incluir corporaciones gigantes o conglomerados multinacionales (no permitas marcas como Bimbo, Coca-Cola, Pepsico, Femsa, Oxxo, DHL, Walmart, etc.). Centra todo tu esfuerzo en comercializadoras locales, abarroteras regionales, transportes de fletes medianos, distribuidoras de zona, talleres y PyMEs verosímiles y reales que de verdad sufren problemas de conciliación en papel, Excel o pérdidas cotidianas de dinero en ruta. Ajusta tus diagnósticos y guiones comerciales para convencer al dueño o fundador autónomo de la PYME de forma sumamente asertiva.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            metadatos_proceso: {
-              type: Type.OBJECT,
-              properties: {
-                total_analizadas: { type: Type.INTEGER },
-                fecha_mapeo: { type: Type.STRING }
-              },
-              required: ["total_analizadas", "fecha_mapeo"]
-            },
-            vacantes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  empresa: { type: Type.STRING, description: "Nombre de la empresa local/SME de la vacante real o verosímil" },
-                  puesto: { type: Type.STRING, description: "Nombre exacto del puesto de trabajo" },
-                  ciudad: { type: Type.STRING, description: "Ciudad y Estado" },
-                  descripcion_corta: { type: Type.STRING, description: "Breve resumen del rol enfocado en su dolor operativo o mermas" },
-                  dolores_detectados: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "Lista de ineficiencias o dolores explícitos o implícitos en el ruteo, liquidación, combustible o papel"
-                  },
-                  herramientas_obsoletas_actuales: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "Herramientas ineficientes que usan (ej. Papel, Excel, WhatsApp)"
-                  },
-                  score_urgencia: { type: Type.INTEGER, description: "Urgencia entre 50 y 100" },
-                  prioridad: { type: Type.STRING, description: "alta, media o baja" },
-                  enrutamiento_ecosistema: {
-                    type: Type.OBJECT,
-                    properties: {
-                      aplica_rute_pro: { type: Type.BOOLEAN },
-                      aplica_conecta_x: { type: Type.BOOLEAN },
-                      aplica_alquimia_cx: { type: Type.BOOLEAN }
-                    },
-                    required: ["aplica_rute_pro", "aplica_conecta_x", "aplica_alquimia_cx"]
-                  },
-                  guion_comercial: { type: Type.STRING, description: "Pitch de venta psicológica directo y personalizado enfocado al dolor de la vacante, con emojis y saltos de línea" },
-                  roi_estimado_propuesta: { type: Type.STRING, description: "Sustitución monetaria o blindaje del presupuesto" },
-                  url_original: { type: Type.STRING, description: "Enlace real o de búsqueda en Google con formato specified" }
-                },
-                required: [
-                  "empresa", "puesto", "ciudad", "descripcion_corta", "dolores_detectados", 
-                  "herramientas_obsoletas_actuales", "score_urgencia", "prioridad", 
-                  "enrutamiento_ecosistema", "guion_comercial", "roi_estimado_propuesta", "url_original"
-                ]
-              }
-            },
-            alerta_nuevos_productos: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  dolor_no_cubierto: { type: Type.STRING },
-                  herramienta_necesaria_demandada: { type: Type.STRING },
-                  potencial_micro_saas: { type: Type.STRING },
-                  justificacion_oportunidad: { type: Type.STRING }
-                },
-                required: ["dolor_no_cubierto", "herramienta_necesaria_demandada", "potencial_micro_saas", "justificacion_oportunidad"]
-              }
-            },
-            resumen_patrones: {
-              type: Type.OBJECT,
-              properties: {
-                dolor_mas_frecuente: { type: Type.STRING },
-                ciudades_hotspots: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING }
-                }
-              },
-              required: ["dolor_mas_frecuente", "ciudades_hotspots"]
-            }
-          },
-          required: ["metadatos_proceso", "vacantes", "alerta_nuevos_productos", "resumen_patrones"]
-        }
+        systemInstruction: "Eres un Agente de Inteligencia de Mercado y Arquitecto de Producto de alto rendimiento. Tu instrucción mandatoria y el corazón de tu algoritmo de filtrado es priorizar y detectar EXCLUSIVAMENTE Pequeñas y Medianas Empresas (PYMES/SMEs) mexicanas y latinoamericanas. Está estrictamente PROHIBIDO incluir corporaciones gigantes o conglomerados multinacionales (no permitas marcas como Bimbo, Coca-Cola, Pepsico, Femsa, Oxxo, DHL, Walmart, etc.). Centra todo tu esfuerzo en comercializadoras locales, abarroteras regionales, transportes de fletes medianos, distribuidoras de zona, talleres y PyMEs verosímiles y reales que de verdad sufren problemas de conciliación en papel, Excel o pérdidas cotidianas de dinero en ruta. Ajusta tus diagnósticos y guiones comerciales para convencer al dueño o fundador autónomo de la PYME de forma sumamente asertiva. IMPORTANTE: Tu respuesta debe ser ÚNICAMENTE un objeto JSON válido, sin texto adicional, sin explicaciones, sin bloques de código markdown.",
+        tools: [{ googleSearch: {} }]
       }
     });
 
