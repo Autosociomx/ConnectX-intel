@@ -332,7 +332,7 @@ function generateSimulationData(
 
 // API endpoint to search and analyze
 app.post("/api/prospect", async (req, res) => {
-  const { ciudad, dolores, puestos, lote, radio, area } = req.body;
+  const { ciudad, dolores, puestos, lote, radio, area, modo_rapido } = req.body;
 
   if (!ciudad || !puestos || !puestos.length) {
     return res.status(400).json({ error: "Faltan parámetros indispensables (ciudad y puestos objetivo)" });
@@ -354,10 +354,34 @@ app.post("/api/prospect", async (req, res) => {
     // Formulate search query block
     const queryTerm = `vacantes de empleo operativas y logística "${puestos.slice(0, 3).join('" OR "')}" en ${ciudad} México de sector ${cleanArea} en Indeed OCC Computrabajo`;
     
-    const userMaxLot = Math.min(lote || 12, 15);
+    const userMaxLot = modo_rapido ? Math.min(lote || 50, 100) : Math.min(lote || 12, 15);
 
-    const prompt = `Eres ConnectX Intel, el Agente de Inteligencia de Mercado de alto rendimiento y Arquitecto de Producto de una factoría de software digital. Tu objetivo es estudiar y analizar lotes de vacantes de empleo activas en México y Latinoamérica para extraer leads hiper-calificados y descubrir patrones ocultos de demanda en el mercado enfocándote EXCLUSIVAMENTE en el nicho de Pequeñas y Medianas Empresas (SMEs / PyMEs) y distribuidores locales.
-    
+    const promptRapido = `Eres ConnectX Intel en MODO DATASET. Busca usando Google Search vacantes de empleo reales de PyMEs en ${ciudad} México para los puestos: ${puestos.join(', ')} en el sector ${cleanArea}.
+
+REGLA: Solo PyMEs locales. Prohibido corporativos (Bimbo, Walmart, DHL, etc.).
+CANTIDAD: Hasta ${userMaxLot} resultados.
+
+Por cada vacante retorna ÚNICAMENTE este JSON mínimo:
+{
+  "vacantes": [
+    {
+      "empresa": "Nombre PyME",
+      "puesto": "Puesto exacto",
+      "ciudad": "Ciudad, Estado",
+      "dolores_detectados": ["dolor 1", "dolor 2"],
+      "score_urgencia": 85,
+      "prioridad": "alta|media|baja",
+      "sector": "${cleanArea}",
+      "url_original": "https://www.google.com/search?q=vacante+empresa+ciudad"
+    }
+  ],
+  "resumen_patrones": { "dolor_mas_frecuente": "...", "ciudades_hotspots": ["${ciudad}"] }
+}
+
+SIN guion_comercial, SIN roi, SIN análisis profundo. Solo detección de señal. JSON válido, sin markdown.`;
+
+    const promptCompleto = `Eres ConnectX Intel, el Agente de Inteligencia de Mercado de alto rendimiento y Arquitecto de Producto de una factoría de software digital. Tu objetivo es estudiar y analizar lotes de vacantes de empleo activas en México y Latinoamérica para extraer leads hiper-calificados y descubrir patrones ocultos de demanda en el mercado enfocándote EXCLUSIVAMENTE en el nicho de Pequeñas y Medianas Empresas (SMEs / PyMEs) y distribuidores locales.
+
 REGLA CRÍTICA DE SELECCIÓN (SOLO PyMEs / SMEs): Está estrictamente PROHIBIDO incluir corporaciones gigantes o conglomerados multinacionales (como Coca-Cola, PepsiCo, Femsa, Bimbo, Oxxo, DHL, Walmart, Mercado Libre, etc.). Todas las empresas mapeadas o listadas deben ser PyMEs locales o regionales reales y verosímiles de la zona (ejemplo: abarroteras de la zona, fletes y transportes familiares, distribuidoras locales, comercializadoras de herrajes, clínicas de barrio, etc.). El guion comercial y de dolor debe estar redactado para convencer directamente al dueño, fundador o administrador de esa PyME (no a recursos humanos de un gigante corporativo).
 
 PUESTOS OBJETIVO DE BÚSQUEDA DEL USUARIO: ${puestos.join(', ')} (Alcance geográfico: ${radio || 'región'}).
@@ -421,7 +445,8 @@ Reglas críticas de evaluación:
 
 Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google Search para obtener vacantes reales en ${ciudad}. Si las consultas reales no cargan suficientes registros en Indeed/Computrabajo, genera hasta ${userMaxLot} prospectos sumamente verosímiles y lógicos con empresas de distribución o logística representativas de la región de ${ciudad}.`;
 
-    console.log(`Ejecutando búsqueda con Gemini 2.0 Flash + Google Search Grounding para: "${queryTerm}"`);
+    const prompt = modo_rapido ? promptRapido : promptCompleto;
+    console.log(`Ejecutando búsqueda Gemini 2.0 Flash [${modo_rapido ? "MODO DATASET" : "MODO COMPLETO"}] para: "${queryTerm}"`);
 
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -552,6 +577,47 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
     console.error("Error invoking Gemini API in ConnectX Intel, returning simulation dataset as fallback:", error);
     const fallback = generateSimulationData(ciudad, puestos, dolores || [], lote || 20);
     res.json(fallback);
+  }
+});
+
+// Enrich a single lead on demand — generates guion + parlamento for one prospect
+app.post("/api/enrich", async (req, res) => {
+  const { empresa, puesto, ciudad, dolores, sector } = req.body;
+  if (!empresa || !puesto) return res.status(400).json({ error: "Faltan empresa y puesto" });
+
+  const isDemo = !process.env.GEMINI_API_KEY;
+  const painStr = (dolores || []).join(" y ") || "procesos manuales ineficientes";
+  const cleanSector = sector || "Logística y Transporte";
+
+  if (isDemo) {
+    const guion = `Hola, soy [Tu nombre] de RoutePro. Vi que ${empresa} está buscando un ${puesto} en ${ciudad}.\n\nNormalmente cuando las empresas de ${cleanSector} buscan este perfil, el dolor oculto es resolver pérdidas por ${painStr}. En RoutePro automatizamos esos procesos del supervisor en tiempo real. ¿Tiene 5 minutos para platicar? 🚚`;
+    return res.json({ guion_comercial: guion, roi_estimado_propuesta: `Ahorro estimado de $8,000–$15,000 MXN/mes al eliminar ${painStr} en ${empresa}.` });
+  }
+
+  try {
+    const ai = getAiClient();
+    const enrichPrompt = `Genera un guion comercial personalizado para contactar a ${empresa} que busca un ${puesto} en ${ciudad} (sector: ${cleanSector}).
+
+Dolores detectados: ${painStr}.
+
+El guion debe:
+- Ser directo al dueño o supervisor, no a RRHH
+- Referenciar la vacante como punto de entrada
+- Enfocarse en automatizar los procesos manuales que ese puesto implica (NO en reemplazar al trabajador)
+- Incluir emojis y saltos de línea listos para WhatsApp
+- Terminar con CTA concreto (demo de 15 min)
+
+Retorna JSON: { "guion_comercial": "...", "roi_estimado_propuesta": "..." }`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: enrichPrompt,
+      config: { systemInstruction: "Responde ÚNICAMENTE con JSON válido, sin markdown, sin texto adicional." }
+    });
+    const data = robustJsonParse(response.text || "{}");
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

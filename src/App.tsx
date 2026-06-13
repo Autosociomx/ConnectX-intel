@@ -207,6 +207,50 @@ export default function App() {
     handlePipelineUpdate(updated);
     triggerNotification("success", "Agregado al Pipeline", `${v.empresa} → Etapa: Detectado`);
   };
+
+  // Modo rápido (dataset) vs completo
+  const [modoRapido, setModoRapido] = useState(false);
+
+  // Dataset acumulado — persiste entre sesiones
+  const [dataset, setDataset] = useState<Vacante[]>(() => {
+    try {
+      const saved = localStorage.getItem("connectx_dataset");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const acumularDataset = (nuevas: Vacante[]) => {
+    setDataset(prev => {
+      const mapa = new Map(prev.map(v => [`${v.empresa}|${v.puesto}|${v.ciudad}`, v]));
+      nuevas.forEach(v => { mapa.set(`${v.empresa}|${v.puesto}|${v.ciudad}`, v); });
+      const merged = Array.from(mapa.values());
+      try { localStorage.setItem("connectx_dataset", JSON.stringify(merged)); } catch {}
+      return merged;
+    });
+  };
+
+  const exportarDatasetCSV = () => {
+    const headers = ["empresa", "puesto", "ciudad", "score_urgencia", "prioridad", "dolores", "sector", "url_original"];
+    const rows = dataset.map(v => [
+      `"${(v.empresa || "").replace(/"/g, "'")}"`,
+      `"${(v.puesto || "").replace(/"/g, "'")}"`,
+      `"${(v.ciudad || "").replace(/"/g, "'")}"`,
+      v.score_urgencia || v.score || "",
+      v.prioridad || "",
+      `"${(v.dolores_detectados || v.dolores || []).join("; ")}"`,
+      `"${((v as any).sector || "").replace(/"/g, "'")}"`,
+      `"${(v.url_original || "").replace(/"/g, "'")}"`,
+    ].join(","));
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `connectx_dataset_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [logs, setLogs] = useState<LogEntry[]>([
     { timestamp: "00:00", type: "ok", msg: "Sistema de prospección ConnectX Intel v2.0 activo." },
     { timestamp: "00:00", type: "info", msg: "Enlace comercial sincronizado con RoutePro API." },
@@ -394,6 +438,7 @@ export default function App() {
           ciudad,
           dolores: activeDolores,
           puestos: checkedPuestos,
+          modo_rapido: modoRapido,
           lote,
           radio,
           area: areaSector === "Custom" ? customAreaSector : areaSector
@@ -424,6 +469,7 @@ export default function App() {
       const extractedVacantes = data.vacantes || [];
       const extractedPatrones = data.patrones || [];
       setVacantes(extractedVacantes);
+      acumularDataset(extractedVacantes);
       setPatrones(extractedPatrones);
       setResumen(data.resumen || "");
       setCiudadesTop(data.ciudades_top || [ciudad]);
@@ -1075,22 +1121,40 @@ export default function App() {
                 />
               </div>
 
+              {/* Modo rápido toggle */}
+              <div className="flex items-center justify-between bg-[#0a0a0c] border border-border-grid/60 rounded px-3 py-2 mt-1">
+                <div>
+                  <p className="text-[10px] font-mono font-black text-white uppercase tracking-wider">Modo Dataset Rápido</p>
+                  <p className="text-[9px] text-[#556375] font-sans">Solo detección, sin guion. Hasta 100 leads/búsqueda.</p>
+                </div>
+                <button
+                  onClick={() => setModoRapido(p => !p)}
+                  className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${modoRapido ? "bg-blue-500" : "bg-[#2a3038]"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${modoRapido ? "left-5" : "left-0.5"}`} />
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   id="btn-buscar"
                   onClick={runProspeccion}
                   disabled={isRunning || puestos.every(p => !p.checked)}
-                  className="col-span-2 bg-accent text-black font-syne font-extrabold text-sm uppercase py-3 px-4 rounded hover:bg-accent/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/10"
+                  className={`col-span-2 font-syne font-extrabold text-sm uppercase py-3 px-4 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                    modoRapido
+                      ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/10"
+                      : "bg-accent hover:bg-accent/80 text-black shadow-accent/10"
+                  }`}
                 >
                   {isRunning ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                      <span>Analizando...</span>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>{modoRapido ? "Acumulando dataset..." : "Analizando..."}</span>
                     </>
                   ) : (
                     <>
-                      <Zap className="w-4 h-4 text-black fill-black" />
-                      <span>Iniciar prospección</span>
+                      <Zap className="w-4 h-4 fill-current" />
+                      <span>{modoRapido ? "Acumular al Dataset" : "Iniciar prospección"}</span>
                     </>
                   )}
                 </button>
@@ -1857,6 +1921,15 @@ export default function App() {
                       Seguimiento de prospectos: Detectado → Contactado → Demo → Propuesta → Cerrado
                     </p>
                   </div>
+                  {dataset.length > 0 && (
+                    <button
+                      onClick={exportarDatasetCSV}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a1a10] hover:bg-emerald-950/40 border border-[#00c97a]/30 text-[#00c97a] rounded text-[10px] font-mono cursor-pointer transition-all flex-shrink-0"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      <span>Export Dataset ({dataset.length})</span>
+                    </button>
+                  )}
                 </div>
                 <PipelineCRM leads={pipelineLeads} onUpdate={handlePipelineUpdate} />
               </div>
