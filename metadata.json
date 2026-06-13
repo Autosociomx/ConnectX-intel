@@ -1,0 +1,6 @@
+{
+  "name": "ConnectX Intel",
+  "description": "Agente de inteligencia comercial de alto rendimiento para RoutePro. Identifica prospectos hiper-calificados en México buscando vacantes operativas y con dolores en ruta.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

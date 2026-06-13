@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-syne: 'Syne', sans-serif;
+  --color-accent: #f97316;
+  --color-surface: #0f0f0f;
+  --color-border-grid: rgba(255, 255, 255, 0.08);
+}

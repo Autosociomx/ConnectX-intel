@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "Prospecto": {
+      "title": "Prospecto",
+      "description": "Documento de prospección comercial en México para integración multitarea con IA y enrutamiento en ecosistema.",
+      "type": "object",
+      "properties": {
+        "id_prospecto": {
+          "type": "string",
+          "description": "ID único legible o hash del prospecto."
+        },
+        "informacion_general": {
+          "type": "object",
+          "description": "Datos comerciales y de contacto primarios del negocio."
+        },
+        "segmentacion": {
+          "type": "object",
+          "description": "Clasificación de industria y volumen operativo."
+        },
+        "analisis_ia": {
+          "type": "object",
+          "description": "Análisis inteligente, dolores detectados y propuesta persuasiva (Warm hook)."
+        },
+        "control": {
+          "type": "object",
+          "description": "Campos de control interno de campaña."
+        }
+      },
+      "required": ["id_prospecto", "informacion_general", "segmentacion", "analisis_ia", "control"]
+    },
+    "DatasetEntrenamiento": {
+      "title": "DatasetEntrenamiento",
+      "description": "Agrupador de conocimiento sectorial y de pain-points estructurado para entrenamientos o fine-tuning de IA.",
+      "type": "object",
+      "properties": {
+        "id_dataset": {
+          "type": "string",
+          "description": "ID exclusivo de identificación del dataset."
+        },
+        "metadatos": {
+          "type": "object",
+          "description": "Categoría y volumen de ejemplos agrupados."
+        },
+        "ejemplos_entrenamiento": {
+          "type": "array",
+          "description": "Muestras estructuradas para entrenamiento de la IA."
+        }
+      },
+      "required": ["id_dataset", "metadatos", "ejemplos_entrenamiento"]
+    }
+  },
+  "firestore": {
+    "/prospectos/{id_prospecto}": {
+      "schema": "Prospecto",
+      "description": "Colección de prospectos procesados o pendientes de análisis."
+    },
+    "/datasets_entrenamiento/{id_dataset}": {
+      "schema": "DatasetEntrenamiento",
+      "description": "Instancias agregadas de datasets por sector industrial para fine-tuning."
+    }
+  }
+}

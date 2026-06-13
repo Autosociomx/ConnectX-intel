@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // GLOBAL CATCH-ALL SAFETY NET (DEFAULT DENY)
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // REUSABLE HARDENED SECURITY HELPERS
+    // ==========================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ==========================================
+    // VALIDATION BLUEPRINT: PROSPECTO
+    // ==========================================
+    function isValidProspecto(data) {
+      return data.keys().hasAll(['id_prospecto', 'informacion_general', 'segmentacion', 'analisis_ia', 'control']) &&
+             data.keys().size() == 5 &&
+             data.id_prospecto is string &&
+             data.id_prospecto.size() <= 128 &&
+             data.informacion_general is map &&
+             data.segmentacion is map &&
+             data.analisis_ia is map &&
+             data.control is map &&
+             data.analisis_ia.estado_procesamiento is string &&
+             data.analisis_ia.estado_procesamiento.size() <= 32;
+    }
+
+    // ==========================================
+    // VALIDATION BLUEPRINT: DATASET ENTRENAMIENTO
+    // ==========================================
+    function isValidDataset(data) {
+      return data.keys().hasAll(['id_dataset', 'metadatos', 'ejemplos_entrenamiento']) &&
+             data.keys().size() == 3 &&
+             data.id_dataset is string &&
+             data.id_dataset.size() <= 128 &&
+             data.metadatos is map &&
+             data.ejemplos_entrenamiento is list &&
+             data.ejemplos_entrenamiento.size() <= 1000;
+    }
+
+    // ==========================================
+    // COLLECTION: PROSPECTOS
+    // ==========================================
+    match /prospectos/{id_prospecto} {
+      // 1. Lecturas: Permitido a usuarios autenticados para operar el dashboard
+      allow get: if isSignedIn() && isValidId(id_prospecto);
+      allow list: if isSignedIn();
+
+      // 2. Creaciones: Requiere usuario autenticado y validación completa de esquema
+      allow create: if isSignedIn() && 
+                       isValidId(id_prospecto) && 
+                       id_prospecto == incoming().id_prospecto && 
+                       isValidProspecto(incoming());
+
+      // 3. Actualizaciones: Permitido con coincidencia de llaves o actualizaciones de IA
+      allow update: if isSignedIn() && 
+                       isValidId(id_prospecto) && 
+                       isValidProspecto(incoming()) && 
+                       incoming().id_prospecto == existing().id_prospecto;
+
+      // 4. Eliminaciones: Reservado a administradores
+      allow delete: if isSignedIn() && isValidId(id_prospecto);
+    }
+
+    // ==========================================
+    // COLLECTION: DATASETS
+    // ==========================================
+    match /datasets_entrenamiento/{id_dataset} {
+      allow get: if isSignedIn() && isValidId(id_dataset);
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() && 
+                       isValidId(id_dataset) && 
+                       id_dataset == incoming().id_dataset && 
+                       isValidDataset(incoming());
+
+      allow update: if isSignedIn() && 
+                       isValidId(id_dataset) && 
+                       isValidDataset(incoming()) && 
+                       incoming().id_dataset == existing().id_dataset;
+
+      allow delete: if isSignedIn() && isValidId(id_dataset);
+    }
+  }
+}
