@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
@@ -201,6 +201,46 @@ function generateSimulationData(
     const queryParaGoogle = `vacante ${puesto} ${companyName} ${targetCity}`;
     const url_original = `https://www.google.com/search?q=${encodeURIComponent(queryParaGoogle)}`;
 
+    const painStr2 = dolores_detectados.join(" y ");
+    const usaCanalLlamada = dolores_detectados.some(d => d.toLowerCase().includes("caja") || d.toLowerCase().includes("liquidac"));
+    const parlamento_mb = {
+      fases: [
+        {
+          fase: "apertura" as const,
+          titulo: "Apertura — Gancho de Contexto",
+          guion: `Hola, soy [Tu nombre] de RoutePro. Vi que ${companyName} está buscando un ${puesto} en ${targetCity}. Llevo años trabajando con distribuidoras como la suya y quería platicarle algo que les puede ahorrar tiempo y dinero. ¿Tiene 3 minutitos?`,
+          tip: "Menciona la vacante específica para demostrar que hiciste tarea. No vendas todavía — solo pide los 3 minutos."
+        },
+        {
+          fase: "sondeo" as const,
+          titulo: "Sondeo — Diagnóstico del Dolor",
+          guion: `Cuénteme, cuando su ${puesto} termina el día, ¿cuánto tiempo le toma cuadrar la liquidación con el efectivo y las notas firmadas? ¿Tiene algún sistema o todavía lo hacen en papel o por WhatsApp?`,
+          tip: "Escucha más de lo que hablas. El dueño te dirá exactamente cuál es su mayor dolor: confirma si mencionan ${painStr2}."
+        },
+        {
+          fase: "presentacion" as const,
+          titulo: "Presentación — Puente al Ahorro",
+          guion: `Exactamente ese problema lo resolvemos en RoutePro. Imagínese que su ${puesto} cierra el día en 5 minutos desde el celular, sin papeles ni descuadres. El sistema registra cada cobro, entrega y merma en tiempo real. ${roi_estimado_propuesta}`,
+          tip: "Usa el lenguaje del dueño. Cambia 'software' por 'ahorro' y 'sistema' por 'control'. No muestres pantallas todavía."
+        },
+        {
+          fase: "objeciones" as const,
+          titulo: "Manejo de Objeciones — Blindaje",
+          guion: `Entiendo que quizás ya probaron algo parecido o sienten que es complicado de implementar. Lo que nos diferencia es que instalamos y capacitamos en un día, y si en 30 días no ven el ahorro prometido, no cobran nada. ¿Qué sería lo que les daría más confianza para probarlo?`,
+          tip: "La objeción más común del dueño de PyME es el precio o el miedo al cambio. Ofrece garantía de resultado, no de producto."
+        },
+        {
+          fase: "cierre" as const,
+          titulo: "Cierre — Siguiente Paso Concreto",
+          guion: `¿Qué le parece si le agendo una demo de 15 minutos esta semana donde le muestro exactamente cómo funciona para una empresa como ${companyName}? Sin compromiso, solo para que vea los números reales. ¿Le funciona mejor el miércoles o el jueves?`,
+          tip: "Ofrece dos opciones de fecha, nunca preguntes '¿le interesa?'. Asume el interés y cierra con fecha específica."
+        }
+      ],
+      duracion_estimada: "8–12 minutos",
+      canal_recomendado: usaCanalLlamada ? "Llamada telefónica + WhatsApp de seguimiento" : "WhatsApp directo + llamada de cierre",
+      tono: "Cercano, directo y orientado a resultados tangibles para el dueño de PyME"
+    };
+
     vacantes.push({
       empresa: companyName,
       puesto: puesto,
@@ -222,7 +262,8 @@ function generateSimulationData(
       synthesized_dolores_summary,
       company_challenges,
       talking_points,
-      url_original
+      url_original,
+      parlamento_mb
     });
   }
 
@@ -359,93 +400,14 @@ Reglas críticas de evaluación:
 
 Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google Search para obtener vacantes reales en ${ciudad}. Si las consultas reales no cargan suficientes registros en Indeed/Computrabajo, genera hasta ${userMaxLot} prospectos sumamente verosímiles y lógicos con empresas de distribución o logística representativas de la región de ${ciudad}.`;
 
-    console.log(`Executing Gemini 3.5 Flash Search with query: "${queryTerm}"`);
-    
+    console.log(`Ejecutando búsqueda con Gemini 2.0 Flash + Google Search Grounding para: "${queryTerm}"`);
+
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: {
-        systemInstruction: "Eres un Agente de Inteligencia de Mercado y Arquitecto de Producto de alto rendimiento. Tu instrucción mandatoria y el corazón de tu algoritmo de filtrado es priorizar y detectar EXCLUSIVAMENTE Pequeñas y Medianas Empresas (PYMES/SMEs) mexicanas y latinoamericanas. Está estrictamente PROHIBIDO incluir corporaciones gigantes o conglomerados multinacionales (no permitas marcas como Bimbo, Coca-Cola, Pepsico, Femsa, Oxxo, DHL, Walmart, etc.). Centra todo tu esfuerzo en comercializadoras locales, abarroteras regionales, transportes de fletes medianos, distribuidoras de zona, talleres y PyMEs verosímiles y reales que de verdad sufren problemas de conciliación en papel, Excel o pérdidas cotidianas de dinero en ruta. Ajusta tus diagnósticos y guiones comerciales para convencer al dueño o fundador autónomo de la PYME de forma sumamente asertiva.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            metadatos_proceso: {
-              type: Type.OBJECT,
-              properties: {
-                total_analizadas: { type: Type.INTEGER },
-                fecha_mapeo: { type: Type.STRING }
-              },
-              required: ["total_analizadas", "fecha_mapeo"]
-            },
-            vacantes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  empresa: { type: Type.STRING, description: "Nombre de la empresa local/SME de la vacante real o verosímil" },
-                  puesto: { type: Type.STRING, description: "Nombre exacto del puesto de trabajo" },
-                  ciudad: { type: Type.STRING, description: "Ciudad y Estado" },
-                  descripcion_corta: { type: Type.STRING, description: "Breve resumen del rol enfocado en su dolor operativo o mermas" },
-                  dolores_detectados: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "Lista de ineficiencias o dolores explícitos o implícitos en el ruteo, liquidación, combustible o papel"
-                  },
-                  herramientas_obsoletas_actuales: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "Herramientas ineficientes que usan (ej. Papel, Excel, WhatsApp)"
-                  },
-                  score_urgencia: { type: Type.INTEGER, description: "Urgencia entre 50 y 100" },
-                  prioridad: { type: Type.STRING, description: "alta, media o baja" },
-                  enrutamiento_ecosistema: {
-                    type: Type.OBJECT,
-                    properties: {
-                      aplica_rute_pro: { type: Type.BOOLEAN },
-                      aplica_conecta_x: { type: Type.BOOLEAN },
-                      aplica_alquimia_cx: { type: Type.BOOLEAN }
-                    },
-                    required: ["aplica_rute_pro", "aplica_conecta_x", "aplica_alquimia_cx"]
-                  },
-                  guion_comercial: { type: Type.STRING, description: "Pitch de venta psicológica directo y personalizado enfocado al dolor de la vacante, con emojis y saltos de línea" },
-                  roi_estimado_propuesta: { type: Type.STRING, description: "Sustitución monetaria o blindaje del presupuesto" },
-                  url_original: { type: Type.STRING, description: "Enlace real o de búsqueda en Google con formato specified" }
-                },
-                required: [
-                  "empresa", "puesto", "ciudad", "descripcion_corta", "dolores_detectados", 
-                  "herramientas_obsoletas_actuales", "score_urgencia", "prioridad", 
-                  "enrutamiento_ecosistema", "guion_comercial", "roi_estimado_propuesta", "url_original"
-                ]
-              }
-            },
-            alerta_nuevos_productos: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  dolor_no_cubierto: { type: Type.STRING },
-                  herramienta_necesaria_demandada: { type: Type.STRING },
-                  potencial_micro_saas: { type: Type.STRING },
-                  justificacion_oportunidad: { type: Type.STRING }
-                },
-                required: ["dolor_no_cubierto", "herramienta_necesaria_demandada", "potencial_micro_saas", "justificacion_oportunidad"]
-              }
-            },
-            resumen_patrones: {
-              type: Type.OBJECT,
-              properties: {
-                dolor_mas_frecuente: { type: Type.STRING },
-                ciudades_hotspots: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING }
-                }
-              },
-              required: ["dolor_mas_frecuente", "ciudades_hotspots"]
-            }
-          },
-          required: ["metadatos_proceso", "vacantes", "alerta_nuevos_productos", "resumen_patrones"]
-        }
+        systemInstruction: "Eres un Agente de Inteligencia de Mercado y Arquitecto de Producto de alto rendimiento. Tu instrucción mandatoria y el corazón de tu algoritmo de filtrado es priorizar y detectar EXCLUSIVAMENTE Pequeñas y Medianas Empresas (PYMES/SMEs) mexicanas y latinoamericanas. Está estrictamente PROHIBIDO incluir corporaciones gigantes o conglomerados multinacionales (no permitas marcas como Bimbo, Coca-Cola, Pepsico, Femsa, Oxxo, DHL, Walmart, etc.). Centra todo tu esfuerzo en comercializadoras locales, abarroteras regionales, transportes de fletes medianos, distribuidoras de zona, talleres y PyMEs verosímiles y reales que de verdad sufren problemas de conciliación en papel, Excel o pérdidas cotidianas de dinero en ruta. Ajusta tus diagnósticos y guiones comerciales para convencer al dueño o fundador autónomo de la PYME de forma sumamente asertiva. IMPORTANTE: Tu respuesta debe ser ÚNICAMENTE un objeto JSON válido, sin texto adicional, sin explicaciones, sin bloques de código markdown.",
+        tools: [{ googleSearch: {} }]
       }
     });
 
@@ -478,6 +440,45 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
 
         const url_original = v.url_original || `https://www.google.com/search?q=${encodeURIComponent(`vacante de ${v.puesto} ${v.empresa || ""} ${v.ciudad || ""}`)}`;
 
+        const usaCanalLlamadaApi = dolores.some((d: string) => d.toLowerCase().includes("caja") || d.toLowerCase().includes("liquidac"));
+        const parlamento_mb = v.parlamento_mb || {
+          fases: [
+            {
+              fase: "apertura",
+              titulo: "Apertura — Gancho de Contexto",
+              guion: `Hola, soy [Tu nombre] de RoutePro. Vi que ${v.empresa} está buscando un ${v.puesto} en ${v.ciudad}. Llevo años trabajando con distribuidoras como la suya y quería platicarle algo que les puede ahorrar tiempo y dinero. ¿Tiene 3 minutitos?`,
+              tip: "Menciona la vacante específica para demostrar que hiciste tarea. No vendas todavía — solo pide los 3 minutos."
+            },
+            {
+              fase: "sondeo",
+              titulo: "Sondeo — Diagnóstico del Dolor",
+              guion: `Cuénteme, cuando su ${v.puesto} termina el día, ¿cuánto tiempo le toma cuadrar la liquidación con el efectivo y las notas firmadas? ¿Tienen algún sistema o todavía lo hacen en papel o por WhatsApp?`,
+              tip: `Escucha más de lo que hablas. Confirma si mencionan: ${painWords}.`
+            },
+            {
+              fase: "presentacion",
+              titulo: "Presentación — Puente al Ahorro",
+              guion: `Exactamente ese problema lo resolvemos en RoutePro. Imagínese que su ${v.puesto} cierra el día en 5 minutos desde el celular, sin papeles ni descuadres. El sistema registra cada cobro, entrega y merma en tiempo real. ${roi}`,
+              tip: "Usa el lenguaje del dueño. Cambia 'software' por 'ahorro' y 'sistema' por 'control'. No muestres pantallas todavía."
+            },
+            {
+              fase: "objeciones",
+              titulo: "Manejo de Objeciones — Blindaje",
+              guion: `Entiendo que quizás ya probaron algo parecido o sienten que es complicado de implementar. Lo que nos diferencia es que instalamos y capacitamos en un día, y si en 30 días no ven el ahorro prometido, no cobran nada. ¿Qué sería lo que les daría más confianza para probarlo?`,
+              tip: "La objeción más común del dueño de PyME es el precio o el miedo al cambio. Ofrece garantía de resultado, no de producto."
+            },
+            {
+              fase: "cierre",
+              titulo: "Cierre — Siguiente Paso Concreto",
+              guion: `¿Qué le parece si le agendo una demo de 15 minutos esta semana donde le muestro exactamente cómo funciona para una empresa como ${v.empresa}? Sin compromiso, solo para que vea los números reales. ¿Le funciona mejor el miércoles o el jueves?`,
+              tip: "Ofrece dos opciones de fecha, nunca preguntes '¿le interesa?'. Asume el interés y cierra con fecha específica."
+            }
+          ],
+          duracion_estimada: "8–12 minutos",
+          canal_recomendado: usaCanalLlamadaApi ? "Llamada telefónica + WhatsApp de seguimiento" : "WhatsApp directo + llamada de cierre",
+          tono: "Cercano, directo y orientado a resultados tangibles para el dueño de PyME"
+        };
+
         return {
           ...v,
           // old keys
@@ -490,7 +491,8 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
           synthesized_dolores_summary: `La vacante de ${v.puesto} en ${v.empresa} evidencia mermas financieras y sobrecarga administrativa persistentes derivadas de: ${painWords}.`,
           company_challenges,
           talking_points,
-          url_original
+          url_original,
+          parlamento_mb
         };
       });
     }

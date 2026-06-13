@@ -1,20 +1,25 @@
 import React, { useState } from "react";
-import { 
-  AlertTriangle, 
-  Zap, 
-  MessageSquare, 
-  Copy, 
-  Check, 
-  HelpCircle, 
-  TrendingUp, 
-  Briefcase, 
-  ShieldAlert, 
-  Layers, 
-  CheckSquare, 
+import {
+  AlertTriangle,
+  Zap,
+  MessageSquare,
+  Copy,
+  Check,
+  HelpCircle,
+  TrendingUp,
+  Briefcase,
+  ShieldAlert,
+  Layers,
+  CheckSquare,
   Square,
   Sparkles,
   Search,
-  BookOpen
+  BookOpen,
+  Mic,
+  ChevronRight,
+  Phone,
+  Clock,
+  Crosshair
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Vacante } from "../types";
@@ -26,7 +31,9 @@ interface ProspectDeepViewProps {
 
 export function ProspectDeepView({ vacante, isExpanded }: ProspectDeepViewProps) {
   const [copied, setCopied] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<"estrategia" | "diagnostico">("estrategia");
+  const [copiedFase, setCopiedFase] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<"estrategia" | "diagnostico" | "parlamento">("estrategia");
+  const [activeFaseIdx, setActiveFaseIdx] = useState(0);
   
   // Local state for checkboxes to allow sales representatives to "verify" challenges and arguments during sales calls
   const [checkedChallenges, setCheckedChallenges] = useState<Record<number, boolean>>({});
@@ -40,7 +47,24 @@ export function ProspectDeepView({ vacante, isExpanded }: ProspectDeepViewProps)
   const guion = vacante.guion_comercial || vacante.guion || "";
   const roi = vacante.roi_estimado_propuesta || vacante.roi_estimado || "";
   
-  const synthesizedSummary = vacante.synthesized_dolores_summary || 
+  const parlamento = vacante.parlamento_mb;
+
+  const copyFaseToClipboard = async (text: string, faseId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopiedFase(faseId);
+    setTimeout(() => setCopiedFase(null), 2000);
+  };
+
+  const synthesizedSummary = vacante.synthesized_dolores_summary ||
     `La vacante de ${vacante.puesto} en ${vacante.empresa} evidencia mermas financieras y sobrecarga administrativa persistentes derivadas de: ${dolores.join(" y ")}. Se observa alta dependencia de comunicación tradicional y registros en papel.`;
 
   const challenges = vacante.company_challenges || [
@@ -113,6 +137,19 @@ export function ProspectDeepView({ vacante, isExpanded }: ProspectDeepViewProps)
           <BookOpen className="w-3.5 h-3.5" />
           <span>Ficha Técnica y Dolores</span>
         </button>
+        {parlamento && (
+          <button
+            onClick={() => setActiveSubTab("parlamento")}
+            className={`flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase font-mono tracking-wider transition-all rounded-sm cursor-pointer ${
+              activeSubTab === "parlamento"
+                ? "bg-[#111] text-[#a78bfa] font-bold border border-border-grid"
+                : "text-[#7a8899] hover:text-white"
+            }`}
+          >
+            <Mic className="w-3.5 h-3.5" />
+            <span>Parlamento MB</span>
+          </button>
+        )}
       </div>
 
       {activeSubTab === "estrategia" ? (
@@ -248,7 +285,141 @@ export function ProspectDeepView({ vacante, isExpanded }: ProspectDeepViewProps)
           </div>
 
         </div>
-      )}
+      ) : activeSubTab === "parlamento" && parlamento ? (
+        <div className="space-y-4 animate-fadeIn">
+
+          {/* Meta-info bar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-[#1a1025] border border-[#a78bfa]/20 rounded px-2.5 py-1">
+              <Clock className="w-3 h-3 text-[#a78bfa]" />
+              <span className="text-[9px] font-mono text-[#a78bfa] uppercase tracking-wider">{parlamento.duracion_estimada}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-[#0f1a10] border border-[#00c97a]/20 rounded px-2.5 py-1">
+              {parlamento.canal_recomendado.toLowerCase().includes("llamada") ? (
+                <Phone className="w-3 h-3 text-[#00c97a]" />
+              ) : (
+                <MessageSquare className="w-3 h-3 text-[#00c97a]" />
+              )}
+              <span className="text-[9px] font-mono text-[#00c97a] uppercase tracking-wider">{parlamento.canal_recomendado}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-[#1a1410] border border-[#f59e0b]/20 rounded px-2.5 py-1">
+              <Crosshair className="w-3 h-3 text-[#f59e0b]" />
+              <span className="text-[9px] font-mono text-[#f59e0b] uppercase tracking-wider">{parlamento.tono}</span>
+            </div>
+          </div>
+
+          {/* Phase navigation pills */}
+          <div className="flex gap-1 flex-wrap">
+            {parlamento.fases.map((fase, idx) => {
+              const faseColors: Record<string, { active: string; inactive: string; dot: string }> = {
+                apertura:     { active: "bg-blue-950/60 border-blue-400/40 text-blue-300",     inactive: "border-border-grid/40 text-[#556375] hover:text-blue-300",     dot: "bg-blue-400" },
+                sondeo:       { active: "bg-amber-950/60 border-amber-400/40 text-amber-300",   inactive: "border-border-grid/40 text-[#556375] hover:text-amber-300",   dot: "bg-amber-400" },
+                presentacion: { active: "bg-violet-950/60 border-violet-400/40 text-violet-300", inactive: "border-border-grid/40 text-[#556375] hover:text-violet-300", dot: "bg-violet-400" },
+                objeciones:   { active: "bg-red-950/60 border-red-400/40 text-red-300",         inactive: "border-border-grid/40 text-[#556375] hover:text-red-300",         dot: "bg-red-400" },
+                cierre:       { active: "bg-emerald-950/60 border-emerald-400/40 text-emerald-300", inactive: "border-border-grid/40 text-[#556375] hover:text-emerald-300", dot: "bg-emerald-400" },
+              };
+              const colors = faseColors[fase.fase] || faseColors.apertura;
+              const isActive = activeFaseIdx === idx;
+              return (
+                <button
+                  key={fase.fase}
+                  onClick={() => setActiveFaseIdx(idx)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider border rounded transition-all cursor-pointer ${
+                    isActive ? colors.active : colors.inactive
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${colors.dot}`} />
+                  <span>{idx + 1}. {fase.fase}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active phase card */}
+          {parlamento.fases[activeFaseIdx] && (() => {
+            const fase = parlamento.fases[activeFaseIdx];
+            const faseAccentMap: Record<string, string> = {
+              apertura: "#60a5fa",
+              sondeo: "#fbbf24",
+              presentacion: "#a78bfa",
+              objeciones: "#f87171",
+              cierre: "#34d399",
+            };
+            const accent = faseAccentMap[fase.fase] || "#a78bfa";
+
+            return (
+              <motion.div
+                key={fase.fase}
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#0e0e12] border border-border-grid rounded-md overflow-hidden"
+              >
+                {/* Phase header */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-grid/40" style={{ borderLeftColor: accent, borderLeftWidth: 3 }}>
+                  <span className="text-[10px] font-mono font-black uppercase tracking-widest flex items-center gap-1.5" style={{ color: accent }}>
+                    <Mic className="w-3.5 h-3.5" />
+                    {fase.titulo}
+                  </span>
+                  <button
+                    onClick={() => copyFaseToClipboard(fase.guion, fase.fase)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono transition-all active:scale-95 cursor-pointer"
+                    style={{
+                      backgroundColor: `${accent}18`,
+                      border: `1px solid ${accent}40`,
+                      color: accent
+                    }}
+                  >
+                    {copiedFase === fase.fase ? (
+                      <><Check className="w-3 h-3" /><span>Copiado</span></>
+                    ) : (
+                      <><Copy className="w-3 h-3" /><span>Copiar</span></>
+                    )}
+                  </button>
+                </div>
+
+                {/* Guion text */}
+                <div className="px-4 pt-4 pb-3">
+                  <p className="text-xs text-[#e5e9f0] leading-relaxed italic bg-black/30 p-3.5 rounded border border-white/5 whitespace-pre-wrap font-sans selection:bg-violet-900/40">
+                    "{fase.guion}"
+                  </p>
+                </div>
+
+                {/* Tip */}
+                <div className="px-4 pb-4">
+                  <div className="flex items-start gap-2 bg-[#131318] border border-border-grid/50 rounded p-3">
+                    <HelpCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: accent }} />
+                    <p className="text-[10px] text-[#7a8899] leading-relaxed font-sans">
+                      <span className="font-black uppercase tracking-wider" style={{ color: accent }}>Tip: </span>
+                      {fase.tip}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Phase navigation arrows */}
+                <div className="flex items-center justify-between px-4 pb-3 pt-0">
+                  <button
+                    onClick={() => setActiveFaseIdx(i => Math.max(0, i - 1))}
+                    disabled={activeFaseIdx === 0}
+                    className="text-[9px] font-mono text-[#4a5869] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <ChevronRight className="w-3 h-3 rotate-180" /> Anterior
+                  </button>
+                  <span className="text-[9px] font-mono text-[#4a5869]">{activeFaseIdx + 1} / {parlamento.fases.length}</span>
+                  <button
+                    onClick={() => setActiveFaseIdx(i => Math.min(parlamento.fases.length - 1, i + 1))}
+                    disabled={activeFaseIdx === parlamento.fases.length - 1}
+                    className="text-[9px] font-mono text-[#4a5869] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    Siguiente <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })()}
+
+        </div>
+      ) : null}
     </motion.div>
   );
 }
