@@ -26,6 +26,7 @@ export interface Vacante {
   talking_points?: string[];
   enrutamiento_ecosistema?: EnrutamientoEcosistema;
   url_original?: string;
+  parlamento_mb?: ParlamentoMB;
 }
 
 export interface Patron {
@@ -103,6 +104,20 @@ export interface SyncLotHistory {
   ciudad: string;
   scope: string;
   area: string;
+}
+
+export interface ParlamentoMBFase {
+  fase: 'apertura' | 'sondeo' | 'presentacion' | 'objeciones' | 'cierre';
+  titulo: string;
+  guion: string;
+  tip: string;
+}
+
+export interface ParlamentoMB {
+  fases: ParlamentoMBFase[];
+  duracion_estimada: string;
+  canal_recomendado: string;
+  tono: string;
 }
 
 export interface OceanoAzulProject {

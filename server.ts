@@ -201,6 +201,46 @@ function generateSimulationData(
     const queryParaGoogle = `vacante ${puesto} ${companyName} ${targetCity}`;
     const url_original = `https://www.google.com/search?q=${encodeURIComponent(queryParaGoogle)}`;
 
+    const painStr2 = dolores_detectados.join(" y ");
+    const usaCanalLlamada = dolores_detectados.some(d => d.toLowerCase().includes("caja") || d.toLowerCase().includes("liquidac"));
+    const parlamento_mb = {
+      fases: [
+        {
+          fase: "apertura" as const,
+          titulo: "Apertura — Gancho de Contexto",
+          guion: `Hola, soy [Tu nombre] de RoutePro. Vi que ${companyName} está buscando un ${puesto} en ${targetCity}. Llevo años trabajando con distribuidoras como la suya y quería platicarle algo que les puede ahorrar tiempo y dinero. ¿Tiene 3 minutitos?`,
+          tip: "Menciona la vacante específica para demostrar que hiciste tarea. No vendas todavía — solo pide los 3 minutos."
+        },
+        {
+          fase: "sondeo" as const,
+          titulo: "Sondeo — Diagnóstico del Dolor",
+          guion: `Cuénteme, cuando su ${puesto} termina el día, ¿cuánto tiempo le toma cuadrar la liquidación con el efectivo y las notas firmadas? ¿Tiene algún sistema o todavía lo hacen en papel o por WhatsApp?`,
+          tip: "Escucha más de lo que hablas. El dueño te dirá exactamente cuál es su mayor dolor: confirma si mencionan ${painStr2}."
+        },
+        {
+          fase: "presentacion" as const,
+          titulo: "Presentación — Puente al Ahorro",
+          guion: `Exactamente ese problema lo resolvemos en RoutePro. Imagínese que su ${puesto} cierra el día en 5 minutos desde el celular, sin papeles ni descuadres. El sistema registra cada cobro, entrega y merma en tiempo real. ${roi_estimado_propuesta}`,
+          tip: "Usa el lenguaje del dueño. Cambia 'software' por 'ahorro' y 'sistema' por 'control'. No muestres pantallas todavía."
+        },
+        {
+          fase: "objeciones" as const,
+          titulo: "Manejo de Objeciones — Blindaje",
+          guion: `Entiendo que quizás ya probaron algo parecido o sienten que es complicado de implementar. Lo que nos diferencia es que instalamos y capacitamos en un día, y si en 30 días no ven el ahorro prometido, no cobran nada. ¿Qué sería lo que les daría más confianza para probarlo?`,
+          tip: "La objeción más común del dueño de PyME es el precio o el miedo al cambio. Ofrece garantía de resultado, no de producto."
+        },
+        {
+          fase: "cierre" as const,
+          titulo: "Cierre — Siguiente Paso Concreto",
+          guion: `¿Qué le parece si le agendo una demo de 15 minutos esta semana donde le muestro exactamente cómo funciona para una empresa como ${companyName}? Sin compromiso, solo para que vea los números reales. ¿Le funciona mejor el miércoles o el jueves?`,
+          tip: "Ofrece dos opciones de fecha, nunca preguntes '¿le interesa?'. Asume el interés y cierra con fecha específica."
+        }
+      ],
+      duracion_estimada: "8–12 minutos",
+      canal_recomendado: usaCanalLlamada ? "Llamada telefónica + WhatsApp de seguimiento" : "WhatsApp directo + llamada de cierre",
+      tono: "Cercano, directo y orientado a resultados tangibles para el dueño de PyME"
+    };
+
     vacantes.push({
       empresa: companyName,
       puesto: puesto,
@@ -222,7 +262,8 @@ function generateSimulationData(
       synthesized_dolores_summary,
       company_challenges,
       talking_points,
-      url_original
+      url_original,
+      parlamento_mb
     });
   }
 
@@ -478,6 +519,45 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
 
         const url_original = v.url_original || `https://www.google.com/search?q=${encodeURIComponent(`vacante de ${v.puesto} ${v.empresa || ""} ${v.ciudad || ""}`)}`;
 
+        const usaCanalLlamadaApi = dolores.some((d: string) => d.toLowerCase().includes("caja") || d.toLowerCase().includes("liquidac"));
+        const parlamento_mb = v.parlamento_mb || {
+          fases: [
+            {
+              fase: "apertura",
+              titulo: "Apertura — Gancho de Contexto",
+              guion: `Hola, soy [Tu nombre] de RoutePro. Vi que ${v.empresa} está buscando un ${v.puesto} en ${v.ciudad}. Llevo años trabajando con distribuidoras como la suya y quería platicarle algo que les puede ahorrar tiempo y dinero. ¿Tiene 3 minutitos?`,
+              tip: "Menciona la vacante específica para demostrar que hiciste tarea. No vendas todavía — solo pide los 3 minutos."
+            },
+            {
+              fase: "sondeo",
+              titulo: "Sondeo — Diagnóstico del Dolor",
+              guion: `Cuénteme, cuando su ${v.puesto} termina el día, ¿cuánto tiempo le toma cuadrar la liquidación con el efectivo y las notas firmadas? ¿Tienen algún sistema o todavía lo hacen en papel o por WhatsApp?`,
+              tip: `Escucha más de lo que hablas. Confirma si mencionan: ${painWords}.`
+            },
+            {
+              fase: "presentacion",
+              titulo: "Presentación — Puente al Ahorro",
+              guion: `Exactamente ese problema lo resolvemos en RoutePro. Imagínese que su ${v.puesto} cierra el día en 5 minutos desde el celular, sin papeles ni descuadres. El sistema registra cada cobro, entrega y merma en tiempo real. ${roi}`,
+              tip: "Usa el lenguaje del dueño. Cambia 'software' por 'ahorro' y 'sistema' por 'control'. No muestres pantallas todavía."
+            },
+            {
+              fase: "objeciones",
+              titulo: "Manejo de Objeciones — Blindaje",
+              guion: `Entiendo que quizás ya probaron algo parecido o sienten que es complicado de implementar. Lo que nos diferencia es que instalamos y capacitamos en un día, y si en 30 días no ven el ahorro prometido, no cobran nada. ¿Qué sería lo que les daría más confianza para probarlo?`,
+              tip: "La objeción más común del dueño de PyME es el precio o el miedo al cambio. Ofrece garantía de resultado, no de producto."
+            },
+            {
+              fase: "cierre",
+              titulo: "Cierre — Siguiente Paso Concreto",
+              guion: `¿Qué le parece si le agendo una demo de 15 minutos esta semana donde le muestro exactamente cómo funciona para una empresa como ${v.empresa}? Sin compromiso, solo para que vea los números reales. ¿Le funciona mejor el miércoles o el jueves?`,
+              tip: "Ofrece dos opciones de fecha, nunca preguntes '¿le interesa?'. Asume el interés y cierra con fecha específica."
+            }
+          ],
+          duracion_estimada: "8–12 minutos",
+          canal_recomendado: usaCanalLlamadaApi ? "Llamada telefónica + WhatsApp de seguimiento" : "WhatsApp directo + llamada de cierre",
+          tono: "Cercano, directo y orientado a resultados tangibles para el dueño de PyME"
+        };
+
         return {
           ...v,
           // old keys
@@ -490,7 +570,8 @@ Haz tu mejor esfuerzo utilizando la herramienta de búsqueda incorporada Google 
           synthesized_dolores_summary: `La vacante de ${v.puesto} en ${v.empresa} evidencia mermas financieras y sobrecarga administrativa persistentes derivadas de: ${painWords}.`,
           company_challenges,
           talking_points,
-          url_original
+          url_original,
+          parlamento_mb
         };
       });
     }
