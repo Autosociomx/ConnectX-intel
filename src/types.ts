@@ -111,6 +111,21 @@ export interface SyncLotHistory {
   area: string;
 }
 
+export type PipelineEtapa = 'detectado' | 'contactado' | 'demo' | 'propuesta' | 'cerrado';
+
+export interface PipelineLead {
+  id: string;
+  empresa: string;
+  puesto: string;
+  ciudad: string;
+  score: number;
+  etapa: PipelineEtapa;
+  nota: string;
+  fecha_entrada: string;
+  fecha_actualizada: string;
+  guion: string;
+}
+
 export interface ParlamentoMBFase {
   fase: 'apertura' | 'sondeo' | 'presentacion' | 'objeciones' | 'cierre';
   titulo: string;

@@ -28,10 +28,11 @@ import {
   Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory } from "./types";
+import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory, PipelineLead } from "./types";
 import { ProspectDeepView } from "./components/ProspectDeepView";
 import { OceanoAzulEcosystem } from "./components/OceanoAzulEcosystem";
 import { BlueOceanScanner } from "./components/BlueOceanScanner";
+import { PipelineCRM } from "./components/PipelineCRM";
 
 // Firebase and Auth imports
 import { auth, db, handleFirestoreError, OperationType } from "./firebase";
@@ -169,7 +170,43 @@ export default function App() {
   };
 
   // App Operational states
-  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema">("terminal");
+  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema" | "pipeline">("terminal");
+
+  // Pipeline CRM state
+  const [pipelineLeads, setPipelineLeads] = useState<PipelineLead[]>(() => {
+    try {
+      const saved = localStorage.getItem("connectx_pipeline");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const handlePipelineUpdate = (leads: PipelineLead[]) => {
+    setPipelineLeads(leads);
+    try { localStorage.setItem("connectx_pipeline", JSON.stringify(leads)); } catch {}
+  };
+
+  const addToPipeline = (v: Vacante) => {
+    const already = pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto);
+    if (already) {
+      triggerNotification("info", "Ya en Pipeline", `${v.empresa} ya está siendo tracked.`);
+      return;
+    }
+    const lead: PipelineLead = {
+      id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      empresa: v.empresa,
+      puesto: v.puesto,
+      ciudad: v.ciudad,
+      score: v.score_urgencia || v.score || 80,
+      etapa: "detectado",
+      nota: "",
+      fecha_entrada: new Date().toISOString(),
+      fecha_actualizada: new Date().toISOString(),
+      guion: v.guion_comercial || v.guion || ""
+    };
+    const updated = [lead, ...pipelineLeads];
+    handlePipelineUpdate(updated);
+    triggerNotification("success", "Agregado al Pipeline", `${v.empresa} → Etapa: Detectado`);
+  };
   const [logs, setLogs] = useState<LogEntry[]>([
     { timestamp: "00:00", type: "ok", msg: "Sistema de prospección ConnectX Intel v2.0 activo." },
     { timestamp: "00:00", type: "info", msg: "Enlace comercial sincronizado con RoutePro API." },
@@ -1167,6 +1204,23 @@ export default function App() {
                   </span>
                 )}
               </button>
+
+              <button
+                onClick={() => setSelectedTab("pipeline")}
+                className={`flex items-center gap-2 py-3 px-5 text-xs uppercase tracking-wider font-mono border-b-2 transition-all cursor-pointer ${
+                  selectedTab === "pipeline"
+                    ? "border-violet-400 text-violet-400"
+                    : "border-transparent text-[#7a8899] hover:text-white"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Pipeline CRM</span>
+                {pipelineLeads.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[8px] bg-violet-500 text-white font-bold rounded-full select-none">
+                    {pipelineLeads.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* TAB PANEL 1: TERMINAL / LOGS */}
@@ -1483,6 +1537,18 @@ export default function App() {
 
                             <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                               <button
+                                onClick={(e) => { e.stopPropagation(); addToPipeline(v); }}
+                                className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-1.5 rounded border transition-all text-xs font-mono cursor-pointer ${
+                                  pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto)
+                                    ? "bg-violet-950/40 text-violet-300 border-violet-500/30"
+                                    : "bg-[#12091a] hover:bg-violet-950/30 border-violet-500/20 text-violet-400"
+                                }`}
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span>{pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto) ? "En Pipeline" : "Agregar al Pipeline"}</span>
+                              </button>
+
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   saveToFirestore(v, idx);
@@ -1774,6 +1840,26 @@ export default function App() {
 
                 </div>
               )}
+            </div>
+
+            {/* TAB PANEL 6: PIPELINE CRM */}
+            <div id="panel-pipeline" className={`space-y-5 flex-1 ${selectedTab === "pipeline" ? "" : "hidden"}`}>
+              <div className="bg-[#0f0f0f] border border-border-grid rounded-lg p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-grid pb-3 mb-5 gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-syne font-extrabold text-white text-base">Pipeline CRM</h3>
+                      <span className="bg-violet-500/10 border border-violet-500/30 text-violet-300 text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded">
+                        {pipelineLeads.length} leads activos
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans">
+                      Seguimiento de prospectos: Detectado → Contactado → Demo → Propuesta → Cerrado
+                    </p>
+                  </div>
+                </div>
+                <PipelineCRM leads={pipelineLeads} onUpdate={handlePipelineUpdate} />
+              </div>
             </div>
 
           </section>
