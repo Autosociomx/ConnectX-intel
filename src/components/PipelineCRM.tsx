@@ -2,15 +2,15 @@ import React, { useState } from "react";
 import {
   ChevronRight,
   ChevronLeft,
-  MessageSquare,
-  Zap,
   TrendingUp,
-  CheckCircle,
   Trash2,
   Edit3,
   Check,
   DollarSign,
-  Users
+  Users,
+  Sparkles,
+  Copy,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PipelineLead, PipelineEtapa } from "../types";
@@ -75,12 +75,45 @@ function LeadCard({
 }) {
   const [editingNota, setEditingNota] = useState(false);
   const [notaDraft, setNotaDraft] = useState(lead.nota);
+  const [guionEnriquecido, setGuionEnriquecido] = useState<string | null>(null);
+  const [roiEnriquecido, setRoiEnriquecido] = useState<string | null>(null);
+  const [loadingGuion, setLoadingGuion] = useState(false);
+  const [showGuion, setShowGuion] = useState(false);
+  const [copied, setCopied] = useState(false);
   const idx = ETAPA_INDEX[lead.etapa];
   const etapa = etapas[idx];
 
   const saveNota = () => {
     onNota(lead.id, notaDraft);
     setEditingNota(false);
+  };
+
+  const generarGuion = async () => {
+    if (guionEnriquecido) { setShowGuion(v => !v); return; }
+    setLoadingGuion(true);
+    try {
+      const res = await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa: lead.empresa, puesto: lead.puesto, ciudad: lead.ciudad }),
+      });
+      const data = await res.json();
+      setGuionEnriquecido(data.guion_comercial || "No se pudo generar el guión.");
+      setRoiEnriquecido(data.roi_estimado_propuesta || null);
+      setShowGuion(true);
+    } catch {
+      setGuionEnriquecido("Error al conectar con el servidor.");
+      setShowGuion(true);
+    } finally {
+      setLoadingGuion(false);
+    }
+  };
+
+  const copyGuion = () => {
+    if (!guionEnriquecido) return;
+    navigator.clipboard.writeText(guionEnriquecido);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -128,6 +161,52 @@ function LeadCard({
           <span className="truncate">{lead.nota || "Agregar nota..."}</span>
         </button>
       )}
+
+      {/* Generar Guión button */}
+      <button
+        onClick={generarGuion}
+        disabled={loadingGuion}
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded border border-violet-500/30 bg-violet-950/20 hover:bg-violet-950/40 text-violet-300 text-[9px] font-mono uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loadingGuion ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <Sparkles className="w-3 h-3" />
+        )}
+        {loadingGuion ? "Generando..." : guionEnriquecido ? (showGuion ? "Ocultar guión" : "Ver guión") : "Generar Guión IA"}
+      </button>
+
+      {/* Guión expandido */}
+      <AnimatePresence>
+        {showGuion && guionEnriquecido && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-1 space-y-2">
+              <div className="relative bg-black/50 border border-violet-500/20 rounded p-2.5">
+                <pre className="text-[9px] text-[#c8d4e4] font-sans leading-relaxed whitespace-pre-wrap break-words">
+                  {guionEnriquecido}
+                </pre>
+                <button
+                  onClick={copyGuion}
+                  className="absolute top-1.5 right-1.5 p-1 rounded bg-[#1a1c20] border border-border-grid/50 text-[#7a8899] hover:text-white transition-colors cursor-pointer"
+                >
+                  {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                </button>
+              </div>
+              {roiEnriquecido && (
+                <p className="text-[9px] font-mono text-emerald-400 bg-emerald-950/20 border border-emerald-500/20 rounded px-2 py-1.5 leading-relaxed">
+                  💰 {roiEnriquecido}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-1 border-t border-white/5">

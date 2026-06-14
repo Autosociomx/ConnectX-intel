@@ -228,9 +228,9 @@ export function ProspectDeepView({ vacante, isExpanded }: ProspectDeepViewProps)
           </div>
 
         </div>
-      ) : (
+      ) : activeSubTab === "diagnostico" ? (
         <div className="space-y-4 animate-fadeIn">
-          
+
           {/* Synthesized Pain Summary Section - highlighting the underlying problem */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
