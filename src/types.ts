@@ -40,6 +40,11 @@ export interface AlertaNuevoProducto {
   herramienta_necesaria_demandada: string;
   potencial_micro_saas: 'alto' | 'media' | 'bajo' | 'medio';
   justificacion_oportunidad: string;
+  score_rentabilidad?: number;
+  score_facilidad?: number;
+  vacantes_con_este_dolor?: number;
+  precio_mrr_sugerido?: number;
+  semanas_desarrollo?: number;
 }
 
 export interface ResumenPatrones {
@@ -104,6 +109,21 @@ export interface SyncLotHistory {
   ciudad: string;
   scope: string;
   area: string;
+}
+
+export type PipelineEtapa = 'detectado' | 'contactado' | 'demo' | 'propuesta' | 'cerrado';
+
+export interface PipelineLead {
+  id: string;
+  empresa: string;
+  puesto: string;
+  ciudad: string;
+  score: number;
+  etapa: PipelineEtapa;
+  nota: string;
+  fecha_entrada: string;
+  fecha_actualizada: string;
+  guion: string;
 }
 
 export interface ParlamentoMBFase {

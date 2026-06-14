@@ -28,9 +28,11 @@ import {
   Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory } from "./types";
+import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory, PipelineLead } from "./types";
 import { ProspectDeepView } from "./components/ProspectDeepView";
 import { OceanoAzulEcosystem } from "./components/OceanoAzulEcosystem";
+import { BlueOceanScanner } from "./components/BlueOceanScanner";
+import { PipelineCRM } from "./components/PipelineCRM";
 
 // Firebase and Auth imports
 import { auth, db, handleFirestoreError, OperationType } from "./firebase";
@@ -168,7 +170,87 @@ export default function App() {
   };
 
   // App Operational states
-  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema">("terminal");
+  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema" | "pipeline">("terminal");
+
+  // Pipeline CRM state
+  const [pipelineLeads, setPipelineLeads] = useState<PipelineLead[]>(() => {
+    try {
+      const saved = localStorage.getItem("connectx_pipeline");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const handlePipelineUpdate = (leads: PipelineLead[]) => {
+    setPipelineLeads(leads);
+    try { localStorage.setItem("connectx_pipeline", JSON.stringify(leads)); } catch {}
+  };
+
+  const addToPipeline = (v: Vacante) => {
+    const already = pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto);
+    if (already) {
+      triggerNotification("info", "Ya en Pipeline", `${v.empresa} ya está siendo tracked.`);
+      return;
+    }
+    const lead: PipelineLead = {
+      id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      empresa: v.empresa,
+      puesto: v.puesto,
+      ciudad: v.ciudad,
+      score: v.score_urgencia || v.score || 80,
+      etapa: "detectado",
+      nota: "",
+      fecha_entrada: new Date().toISOString(),
+      fecha_actualizada: new Date().toISOString(),
+      guion: v.guion_comercial || v.guion || ""
+    };
+    const updated = [lead, ...pipelineLeads];
+    handlePipelineUpdate(updated);
+    triggerNotification("success", "Agregado al Pipeline", `${v.empresa} → Etapa: Detectado`);
+  };
+
+  // Modo rápido (dataset) vs completo
+  const [modoRapido, setModoRapido] = useState(false);
+
+  // Dataset acumulado — persiste entre sesiones
+  const [dataset, setDataset] = useState<Vacante[]>(() => {
+    try {
+      const saved = localStorage.getItem("connectx_dataset");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  const acumularDataset = (nuevas: Vacante[]) => {
+    setDataset(prev => {
+      const mapa = new Map(prev.map(v => [`${v.empresa}|${v.puesto}|${v.ciudad}`, v]));
+      nuevas.forEach(v => { mapa.set(`${v.empresa}|${v.puesto}|${v.ciudad}`, v); });
+      const merged = Array.from(mapa.values());
+      try { localStorage.setItem("connectx_dataset", JSON.stringify(merged)); } catch {}
+      return merged;
+    });
+  };
+
+  const exportarDatasetCSV = () => {
+    const headers = ["empresa", "puesto", "ciudad", "score_urgencia", "prioridad", "dolores", "sector", "url_original"];
+    const rows = dataset.map(v => [
+      `"${(v.empresa || "").replace(/"/g, "'")}"`,
+      `"${(v.puesto || "").replace(/"/g, "'")}"`,
+      `"${(v.ciudad || "").replace(/"/g, "'")}"`,
+      v.score_urgencia || v.score || "",
+      v.prioridad || "",
+      `"${(v.dolores_detectados || v.dolores || []).join("; ")}"`,
+      `"${((v as any).sector || "").replace(/"/g, "'")}"`,
+      `"${(v.url_original || "").replace(/"/g, "'")}"`,
+    ].join(","));
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `connectx_dataset_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [logs, setLogs] = useState<LogEntry[]>([
     { timestamp: "00:00", type: "ok", msg: "Sistema de prospección ConnectX Intel v2.0 activo." },
     { timestamp: "00:00", type: "info", msg: "Enlace comercial sincronizado con RoutePro API." },
@@ -356,6 +438,7 @@ export default function App() {
           ciudad,
           dolores: activeDolores,
           puestos: checkedPuestos,
+          modo_rapido: modoRapido,
           lote,
           radio,
           area: areaSector === "Custom" ? customAreaSector : areaSector
@@ -386,6 +469,7 @@ export default function App() {
       const extractedVacantes = data.vacantes || [];
       const extractedPatrones = data.patrones || [];
       setVacantes(extractedVacantes);
+      acumularDataset(extractedVacantes);
       setPatrones(extractedPatrones);
       setResumen(data.resumen || "");
       setCiudadesTop(data.ciudades_top || [ciudad]);
@@ -1037,22 +1121,40 @@ export default function App() {
                 />
               </div>
 
+              {/* Modo rápido toggle */}
+              <div className="flex items-center justify-between bg-[#0a0a0c] border border-border-grid/60 rounded px-3 py-2 mt-1">
+                <div>
+                  <p className="text-[10px] font-mono font-black text-white uppercase tracking-wider">Modo Dataset Rápido</p>
+                  <p className="text-[9px] text-[#556375] font-sans">Solo detección, sin guion. Hasta 100 leads/búsqueda.</p>
+                </div>
+                <button
+                  onClick={() => setModoRapido(p => !p)}
+                  className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${modoRapido ? "bg-blue-500" : "bg-[#2a3038]"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${modoRapido ? "left-5" : "left-0.5"}`} />
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   id="btn-buscar"
                   onClick={runProspeccion}
                   disabled={isRunning || puestos.every(p => !p.checked)}
-                  className="col-span-2 bg-accent text-black font-syne font-extrabold text-sm uppercase py-3 px-4 rounded hover:bg-accent/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/10"
+                  className={`col-span-2 font-syne font-extrabold text-sm uppercase py-3 px-4 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                    modoRapido
+                      ? "bg-blue-500 hover:bg-blue-400 text-white shadow-blue-500/10"
+                      : "bg-accent hover:bg-accent/80 text-black shadow-accent/10"
+                  }`}
                 >
                   {isRunning ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                      <span>Analizando...</span>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>{modoRapido ? "Acumulando dataset..." : "Analizando..."}</span>
                     </>
                   ) : (
                     <>
-                      <Zap className="w-4 h-4 text-black fill-black" />
-                      <span>Iniciar prospección</span>
+                      <Zap className="w-4 h-4 fill-current" />
+                      <span>{modoRapido ? "Acumular al Dataset" : "Iniciar prospección"}</span>
                     </>
                   )}
                 </button>
@@ -1163,6 +1265,23 @@ export default function App() {
                 {alertaNuevosProductos.length > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 text-[8px] bg-[#00c97a] text-black font-bold rounded-full select-none animate-pulse">
                     {alertaNuevosProductos.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setSelectedTab("pipeline")}
+                className={`flex items-center gap-2 py-3 px-5 text-xs uppercase tracking-wider font-mono border-b-2 transition-all cursor-pointer ${
+                  selectedTab === "pipeline"
+                    ? "border-violet-400 text-violet-400"
+                    : "border-transparent text-[#7a8899] hover:text-white"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Pipeline CRM</span>
+                {pipelineLeads.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[8px] bg-violet-500 text-white font-bold rounded-full select-none">
+                    {pipelineLeads.length}
                   </span>
                 )}
               </button>
@@ -1482,6 +1601,18 @@ export default function App() {
 
                             <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                               <button
+                                onClick={(e) => { e.stopPropagation(); addToPipeline(v); }}
+                                className={`w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-1.5 rounded border transition-all text-xs font-mono cursor-pointer ${
+                                  pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto)
+                                    ? "bg-violet-950/40 text-violet-300 border-violet-500/30"
+                                    : "bg-[#12091a] hover:bg-violet-950/30 border-violet-500/20 text-violet-400"
+                                }`}
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span>{pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto) ? "En Pipeline" : "Agregar al Pipeline"}</span>
+                              </button>
+
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   saveToFirestore(v, idx);
@@ -1757,60 +1888,51 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Part B: On-Demand Micro-SaaS alarms */}
+                  {/* Part B: Blue Ocean Scanner — oportunidades rankeadas */}
                   <div className="bg-[#0f0f0f] border border-border-grid rounded-lg p-5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-grid pb-3 mb-4 gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-syne font-extrabold text-white text-base">Alertas de Nuevos Productos & Micro-SaaS</h3>
-                          <span className="bg-orange-500/10 border border-orange-500/30 text-accent text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded animate-pulse">Semáforo de Brechas Activo</span>
+                          <h3 className="font-syne font-extrabold text-white text-base">Oportunidades Micro-SaaS — Océano Azul</h3>
+                          <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded animate-pulse">Scanner Activo</span>
                         </div>
-                        <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans font-medium">Brechas de mercado registradas por dolores recurrentes para desarrollo satélite bajo demanda.</p>
+                        <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans">Dolores detectados en vacantes que no tienen software todavía — rankeados por Índice de Impacto.</p>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {alertaNuevosProductos.map((alerta, aIdx) => (
-                        <div key={aIdx} className="bg-[#0b0c10] border border-l-4 border-l-accent border-border-grid p-4 rounded-md space-y-3 relative overflow-hidden flex flex-col justify-between">
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[9px] text-[#7a8899] font-mono select-none uppercase tracking-wider">⚠ Alerta Inteligente</span>
-                              <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
-                                alerta.potencial_micro_saas === "alto" 
-                                  ? "bg-emerald-950 text-emerald-400 border border-emerald-900" 
-                                  : "bg-[#151515] text-[#7a8899] border border-border-grid/60"
-                              }`}>
-                                Potencial {alerta.potencial_micro_saas}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <h4 className="text-[11px] font-sans font-extrabold text-white uppercase tracking-wider">
-                                Dolor No Cubierto
-                              </h4>
-                              <p className="text-xs text-[#a4b3c6] leading-relaxed italic">"{alerta.dolor_no_cubierto}"</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3 pt-2 text-[11px]">
-                            <div className="bg-[#111] p-3 rounded border border-border-grid/50 space-y-1">
-                              <div className="text-[9px] text-accent font-extrabold uppercase tracking-widest">SaaS Requerido</div>
-                              <p className="text-white leading-relaxed">{alerta.herramienta_necesaria_demandada}</p>
-                            </div>
-                            <div className="bg-[#111] p-3 rounded border border-border-grid/50 space-y-1">
-                              <div className="text-[9px] text-[#00c97a] font-extrabold uppercase tracking-widest">Oportunidad del Mercado</div>
-                              <p className="text-white leading-relaxed">{alerta.justificacion_oportunidad}</p>
-                            </div>
-                          </div>
-
-                        </div>
-                      ))}
-                    </div>
+                    <BlueOceanScanner alertas={alertaNuevosProductos} />
                   </div>
 
                 </div>
               )}
+            </div>
+
+            {/* TAB PANEL 6: PIPELINE CRM */}
+            <div id="panel-pipeline" className={`space-y-5 flex-1 ${selectedTab === "pipeline" ? "" : "hidden"}`}>
+              <div className="bg-[#0f0f0f] border border-border-grid rounded-lg p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-grid pb-3 mb-5 gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-syne font-extrabold text-white text-base">Pipeline CRM</h3>
+                      <span className="bg-violet-500/10 border border-violet-500/30 text-violet-300 text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded">
+                        {pipelineLeads.length} leads activos
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans">
+                      Seguimiento de prospectos: Detectado → Contactado → Demo → Propuesta → Cerrado
+                    </p>
+                  </div>
+                  {dataset.length > 0 && (
+                    <button
+                      onClick={exportarDatasetCSV}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a1a10] hover:bg-emerald-950/40 border border-[#00c97a]/30 text-[#00c97a] rounded text-[10px] font-mono cursor-pointer transition-all flex-shrink-0"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      <span>Export Dataset ({dataset.length})</span>
+                    </button>
+                  )}
+                </div>
+                <PipelineCRM leads={pipelineLeads} onUpdate={handlePipelineUpdate} />
+              </div>
             </div>
 
           </section>
