@@ -157,3 +157,21 @@ export interface OceanoAzulProject {
   bovedaSector: string;
 }
 
+export type EmploymentProfileStatus = 'incompleto' | 'completo' | 'verificado';
+
+export interface EmploymentProfile {
+  uid: string;
+  nombre: string;
+  telefono: string;
+  ciudad: string;
+  experiencia: string;
+  habilidades: string[];
+  educacion: string;
+  disponibilidad: string;
+  cvUrl?: string;
+  certificaciones?: string;
+  portafolio?: string;
+  expectativaSalarial?: string;
+  status: EmploymentProfileStatus;
+  updatedAt: string;
+}
