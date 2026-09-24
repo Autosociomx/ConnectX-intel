@@ -766,6 +766,28 @@ Genera entre 4 y 7 características de alto impacto comercial, indicando priorid
   }
 });
 
+// Employment Profile publication bridge (phase A)
+app.post("/api/empleo/publicar", async (req, res) => {
+  const { perfil, destino } = req.body || {};
+
+  if (!perfil || typeof perfil !== "object") {
+    return res.status(400).json({ error: "Perfil de empleo inválido." });
+  }
+
+  if (!perfil.nombre || !perfil.telefono || !perfil.ciudad) {
+    return res.status(400).json({ error: "Faltan campos obligatorios para publicar el perfil." });
+  }
+
+  const target = typeof destino === "string" && destino.trim() ? destino.trim() : "SNE_ADAPTER_READY";
+
+  return res.json({
+    ok: true,
+    status: "pendiente_integracion_externa",
+    destino: target,
+    message: "Perfil recibido en capa interna de publicación. Adaptador externo listo para fase B."
+  });
+});
+
 
 // Serve static frontend assets and routing
 async function startServer() {

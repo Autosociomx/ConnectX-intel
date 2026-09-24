@@ -28,7 +28,7 @@ import {
   Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory, PipelineLead } from "./types";
+import { Vacante, Patron, Feature, LogEntry, AppNotification, AlertaNuevoProducto, SyncLotHistory, PipelineLead, EmploymentProfile } from "./types";
 import { ProspectDeepView } from "./components/ProspectDeepView";
 import { OceanoAzulEcosystem } from "./components/OceanoAzulEcosystem";
 import { BlueOceanScanner } from "./components/BlueOceanScanner";
@@ -43,7 +43,7 @@ import {
   onAuthStateChanged, 
   User 
 } from "firebase/auth";
-import { doc, setDoc, getDocs, collection } from "firebase/firestore";
+import { doc, setDoc, getDocs, collection, getDoc } from "firebase/firestore";
 
 export default function App() {
   // Firebase Sync state
@@ -170,7 +170,7 @@ export default function App() {
   };
 
   // App Operational states
-  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema" | "pipeline">("terminal");
+  const [selectedTab, setSelectedTab] = useState<"terminal" | "vacantes" | "reporte" | "routepro" | "ecosistema" | "pipeline" | "empleo">("terminal");
 
   // Pipeline CRM state
   const [pipelineLeads, setPipelineLeads] = useState<PipelineLead[]>(() => {
@@ -184,6 +184,12 @@ export default function App() {
     setPipelineLeads(leads);
     try { localStorage.setItem("connectx_pipeline", JSON.stringify(leads)); } catch {}
   };
+
+  const [employmentProfile, setEmploymentProfile] = useState<EmploymentProfile | null>(null);
+  const [employmentStep, setEmploymentStep] = useState<1 | 2 | 3>(1);
+  const [employmentLoading, setEmploymentLoading] = useState(false);
+  const [employmentSaving, setEmploymentSaving] = useState(false);
+  const [publicationStatus, setPublicationStatus] = useState<string>("");
 
   const addToPipeline = (v: Vacante) => {
     const already = pipelineLeads.some(l => l.empresa === v.empresa && l.puesto === v.puesto);
@@ -591,6 +597,134 @@ export default function App() {
     return () => clearInterval(alertInterval);
   }, []);
 
+  const createEmptyEmploymentProfile = (uid: string): EmploymentProfile => ({
+    uid,
+    nombre: "",
+    telefono: "",
+    ciudad: "",
+    experiencia: "",
+    habilidades: [],
+    educacion: "",
+    disponibilidad: "",
+    cvUrl: "",
+    certificaciones: "",
+    portafolio: "",
+    expectativaSalarial: "",
+    status: "incompleto",
+    updatedAt: new Date().toISOString()
+  });
+
+  const resolveEmploymentStatus = (profile: EmploymentProfile) => {
+    const hasRequired = Boolean(
+      profile.nombre.trim() &&
+      profile.telefono.trim() &&
+      profile.ciudad.trim() &&
+      profile.experiencia.trim() &&
+      profile.habilidades.length > 0 &&
+      profile.educacion.trim() &&
+      profile.disponibilidad.trim()
+    );
+    return hasRequired ? "completo" : "incompleto";
+  };
+
+  const loadEmploymentProfile = async (currentUser: User) => {
+    setEmploymentLoading(true);
+    try {
+      const profileRef = doc(db, "perfiles_empleo", currentUser.uid);
+      const snap = await getDoc(profileRef);
+      if (snap.exists()) {
+        const data = snap.data() as EmploymentProfile;
+        setEmploymentProfile(data);
+        setPublicationStatus("");
+        addLog("ok", "Perfil de empleo recuperado desde Firestore.", Date.now());
+      } else {
+        const emptyProfile = createEmptyEmploymentProfile(currentUser.uid);
+        setEmploymentProfile(emptyProfile);
+      }
+    } catch (error: any) {
+      addLog("err", `No se pudo cargar el perfil de empleo: ${error.message}`, Date.now());
+      const fallbackProfile = createEmptyEmploymentProfile(currentUser.uid);
+      setEmploymentProfile(fallbackProfile);
+    } finally {
+      setEmploymentLoading(false);
+    }
+  };
+
+  const saveEmploymentProfile = async () => {
+    if (!user || !employmentProfile) {
+      triggerNotification("warning", "Inicia Sesión", "Debes iniciar sesión para guardar tu perfil de empleo.");
+      return;
+    }
+    setEmploymentSaving(true);
+    const profileRef = doc(db, "perfiles_empleo", user.uid);
+    const status = resolveEmploymentStatus(employmentProfile);
+    const profileToSave: EmploymentProfile = {
+      ...employmentProfile,
+      uid: user.uid,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await setDoc(profileRef, profileToSave);
+      setEmploymentProfile(profileToSave);
+      triggerNotification("success", "Perfil Guardado", `Perfil laboral ${status}.`);
+      addLog("ok", `Perfil de empleo guardado (${status}).`, Date.now());
+    } catch (error: any) {
+      addLog("err", `Error guardando perfil de empleo: ${error.message}`, Date.now());
+      triggerNotification("alert", "Error de Guardado", "No se pudo guardar el perfil de empleo.");
+    } finally {
+      setEmploymentSaving(false);
+    }
+  };
+
+  const publishEmploymentProfile = async () => {
+    if (!user || !employmentProfile) {
+      triggerNotification("warning", "Inicia Sesión", "Debes iniciar sesión para publicar tu perfil.");
+      return;
+    }
+    if (resolveEmploymentStatus(employmentProfile) !== "completo") {
+      triggerNotification("warning", "Perfil Incompleto", "Completa los campos obligatorios antes de publicar.");
+      return;
+    }
+
+    const payload = {
+      ...employmentProfile,
+      uid: user.uid,
+      status: "completo",
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, "bolsa_empleo_publicaciones", user.uid), {
+        uid: user.uid,
+        plataforma: "SNE_ADAPTER_READY",
+        status: "pendiente_integracion_externa",
+        updatedAt: payload.updatedAt
+      });
+
+      const response = await fetch("/api/empleo/publicar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          perfil: payload,
+          destino: "SNE_ADAPTER_READY"
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Publicación fallida (${response.status})`);
+      }
+
+      const result = await response.json();
+      setPublicationStatus(result.status || "pendiente_integracion_externa");
+      addLog("ok", "Capa de conexión de empleo activada para publicación externa.", Date.now());
+      triggerNotification("success", "Conexión Lista", "Tu perfil quedó en cola para conexión externa (fase A).");
+    } catch (error: any) {
+      addLog("err", `Error publicando perfil: ${error.message}`, Date.now());
+      triggerNotification("alert", "Error de Publicación", "No se pudo conectar la publicación del perfil.");
+    }
+  };
+
   // Listen for Google Auth changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -598,8 +732,11 @@ export default function App() {
       if (u) {
         addLog("ok", `Sesión de Google iniciada: ${u.email}`, Date.now());
         fetchSavedProspects(u);
+        loadEmploymentProfile(u);
       } else {
         addLog("info", "Inicia sesión con Google para almacenar prospectos persistentes en Firestore.", Date.now());
+        setEmploymentProfile(null);
+        setPublicationStatus("");
       }
     });
     return () => unsubscribe();
@@ -641,6 +778,8 @@ export default function App() {
       await signOut(auth);
       setUser(null);
       setSavedStatus({});
+      setEmploymentProfile(null);
+      setPublicationStatus("");
       triggerNotification("info", "Sesión Cerrada", "Has cerrado sesión correctamente.");
     } catch (error: any) {
       addLog("err", `Error cerrando sesión: ${error.message}`, Date.now());
@@ -833,6 +972,37 @@ export default function App() {
       const updated = [newHistoryEntry, ...prev];
       localStorage.setItem("connectx_sync_history", JSON.stringify(updated));
       return updated;
+    });
+  };
+
+  type EmploymentEditableTextField =
+    | "nombre"
+    | "telefono"
+    | "ciudad"
+    | "experiencia"
+    | "educacion"
+    | "disponibilidad"
+    | "cvUrl"
+    | "certificaciones"
+    | "portafolio"
+    | "expectativaSalarial";
+
+  const updateEmploymentField = (field: EmploymentEditableTextField, value: string) => {
+    if (!employmentProfile) return;
+    setEmploymentProfile({
+      ...employmentProfile,
+      [field]: value,
+      updatedAt: new Date().toISOString()
+    });
+  };
+
+  const updateEmploymentSkills = (value: string) => {
+    const skills = value.split(",").map(s => s.trim()).filter(Boolean);
+    if (!employmentProfile) return;
+    setEmploymentProfile({
+      ...employmentProfile,
+      habilidades: skills,
+      updatedAt: new Date().toISOString()
     });
   };
 
@@ -1282,6 +1452,29 @@ export default function App() {
                 {pipelineLeads.length > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 text-[8px] bg-violet-500 text-white font-bold rounded-full select-none">
                     {pipelineLeads.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setSelectedTab("empleo")}
+                className={`flex items-center gap-2 py-3 px-5 text-xs uppercase tracking-wider font-mono border-b-2 transition-all cursor-pointer ${
+                  selectedTab === "empleo"
+                    ? "border-blue-400 text-blue-400"
+                    : "border-transparent text-[#7a8899] hover:text-white"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Perfil Empleo</span>
+                {employmentProfile?.status && (
+                  <span className={`ml-1 px-1.5 py-0.5 text-[8px] font-bold rounded-full ${
+                    employmentProfile.status === "completo"
+                      ? "bg-[#00c97a] text-black"
+                      : employmentProfile.status === "verificado"
+                        ? "bg-blue-500 text-white"
+                        : "bg-[#3a4555] text-white"
+                  }`}>
+                    {employmentProfile.status}
                   </span>
                 )}
               </button>
@@ -1932,6 +2125,134 @@ export default function App() {
                   )}
                 </div>
                 <PipelineCRM leads={pipelineLeads} onUpdate={handlePipelineUpdate} />
+              </div>
+            </div>
+
+            {/* TAB PANEL 7: PERFIL DE EMPLEO */}
+            <div id="panel-empleo" className={`space-y-5 flex-1 ${selectedTab === "empleo" ? "" : "hidden"}`}>
+              <div className="bg-[#0f0f0f] border border-border-grid rounded-lg p-5 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-grid pb-3 gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-syne font-extrabold text-white text-base">Perfil de Empleo</h3>
+                      <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[8px] tracking-widest uppercase font-black px-1.5 py-0.5 rounded">
+                        Conexión fase A
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#7a8899] mt-0.5 font-sans">
+                      Registro laboral guiado por pasos con persistencia segura por usuario.
+                    </p>
+                  </div>
+                  <div className="text-[10px] text-[#7a8899]">
+                    Paso {employmentStep} de 3
+                  </div>
+                </div>
+
+                {!user ? (
+                  <div className="bg-[#1a0f02]/40 border border-[#e05c00]/30 text-accent p-3.5 rounded-lg text-xs leading-relaxed flex items-center justify-between gap-3">
+                    <span>Inicia sesión con Google para crear y guardar tu perfil laboral.</span>
+                    <button
+                      onClick={handleSignIn}
+                      className="px-3 py-1 bg-accent/20 hover:bg-accent/30 border border-accent/40 text-accent text-[11px] rounded font-mono shrink-0 cursor-pointer font-bold"
+                    >
+                      Conectar
+                    </button>
+                  </div>
+                ) : employmentLoading || !employmentProfile ? (
+                  <div className="bg-[#0a0a0a] border border-border-grid rounded p-6 text-center text-[#7a8899] text-xs">
+                    Cargando perfil de empleo...
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      <button
+                        onClick={() => setEmploymentStep(1)}
+                        className={`px-3 py-1.5 rounded border cursor-pointer ${employmentStep === 1 ? "bg-accent/20 border-accent/50 text-accent" : "bg-[#111] border-border-grid text-[#7a8899]"}`}
+                      >
+                        1. Datos básicos
+                      </button>
+                      <button
+                        onClick={() => setEmploymentStep(2)}
+                        className={`px-3 py-1.5 rounded border cursor-pointer ${employmentStep === 2 ? "bg-accent/20 border-accent/50 text-accent" : "bg-[#111] border-border-grid text-[#7a8899]"}`}
+                      >
+                        2. Experiencia
+                      </button>
+                      <button
+                        onClick={() => setEmploymentStep(3)}
+                        className={`px-3 py-1.5 rounded border cursor-pointer ${employmentStep === 3 ? "bg-accent/20 border-accent/50 text-accent" : "bg-[#111] border-border-grid text-[#7a8899]"}`}
+                      >
+                        3. Opcionales + resumen
+                      </button>
+                    </div>
+
+                    {employmentStep === 1 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input value={employmentProfile.nombre} onChange={(e) => updateEmploymentField("nombre", e.target.value)} placeholder="Nombre completo*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.telefono} onChange={(e) => updateEmploymentField("telefono", e.target.value)} placeholder="Teléfono*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.ciudad} onChange={(e) => updateEmploymentField("ciudad", e.target.value)} placeholder="Ciudad*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none md:col-span-2" />
+                        <input value={employmentProfile.disponibilidad} onChange={(e) => updateEmploymentField("disponibilidad", e.target.value)} placeholder="Disponibilidad (ej. Inmediata)*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none md:col-span-2" />
+                      </div>
+                    )}
+
+                    {employmentStep === 2 && (
+                      <div className="space-y-3">
+                        <textarea value={employmentProfile.experiencia} onChange={(e) => updateEmploymentField("experiencia", e.target.value)} placeholder="Experiencia laboral*" rows={4} className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.educacion} onChange={(e) => updateEmploymentField("educacion", e.target.value)} placeholder="Educación*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.habilidades.join(", ")} onChange={(e) => updateEmploymentSkills(e.target.value)} placeholder="Habilidades separadas por coma*" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                      </div>
+                    )}
+
+                    {employmentStep === 3 && (
+                      <div className="space-y-3">
+                        <input value={employmentProfile.cvUrl || ""} onChange={(e) => updateEmploymentField("cvUrl", e.target.value)} placeholder="URL de CV (opcional)" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.portafolio || ""} onChange={(e) => updateEmploymentField("portafolio", e.target.value)} placeholder="Portafolio (opcional)" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <input value={employmentProfile.expectativaSalarial || ""} onChange={(e) => updateEmploymentField("expectativaSalarial", e.target.value)} placeholder="Expectativa salarial (opcional)" className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+                        <textarea value={employmentProfile.certificaciones || ""} onChange={(e) => updateEmploymentField("certificaciones", e.target.value)} placeholder="Certificaciones (opcional)" rows={3} className="w-full bg-[#151515] border border-border-grid text-sm text-[#d0d8e8] px-3 py-2 rounded outline-none" />
+
+                        <div className="bg-[#0a0a0a] border border-border-grid rounded p-3 text-xs space-y-1">
+                          <div className="text-white font-bold">Resumen actual</div>
+                          <div className="text-[#a4b3c6]">Nombre: {employmentProfile.nombre || "—"}</div>
+                          <div className="text-[#a4b3c6]">Ciudad: {employmentProfile.ciudad || "—"}</div>
+                          <div className="text-[#a4b3c6]">Habilidades: {employmentProfile.habilidades.join(", ") || "—"}</div>
+                          <div className="text-[#a4b3c6]">Estatus: {resolveEmploymentStatus(employmentProfile)}</div>
+                          <div className="text-[#a4b3c6]">Publicación: {publicationStatus || "sin publicar"}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      {employmentStep > 1 && (
+                        <button
+                          onClick={() => setEmploymentStep((prev) => (prev - 1) as 1 | 2 | 3)}
+                          className="px-3 py-1.5 bg-[#151515] hover:bg-[#202020] border border-border-grid text-white rounded text-xs font-mono cursor-pointer"
+                        >
+                          Anterior
+                        </button>
+                      )}
+                      {employmentStep < 3 && (
+                        <button
+                          onClick={() => setEmploymentStep((prev) => (prev + 1) as 1 | 2 | 3)}
+                          className="px-3 py-1.5 bg-accent text-black font-bold rounded text-xs font-mono cursor-pointer"
+                        >
+                          Siguiente
+                        </button>
+                      )}
+                      <button
+                        onClick={saveEmploymentProfile}
+                        disabled={employmentSaving}
+                        className="px-3 py-1.5 bg-[#0a1a10] hover:bg-emerald-950/40 border border-[#00c97a]/30 text-[#00c97a] rounded text-xs font-mono cursor-pointer disabled:opacity-50"
+                      >
+                        {employmentSaving ? "Guardando..." : "Guardar Perfil"}
+                      </button>
+                      <button
+                        onClick={publishEmploymentProfile}
+                        className="px-3 py-1.5 bg-blue-950/40 hover:bg-blue-900/40 border border-blue-500/30 text-blue-300 rounded text-xs font-mono cursor-pointer"
+                      >
+                        Publicar a conexión (fase A)
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

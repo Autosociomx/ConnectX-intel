@@ -104,5 +104,75 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() && isValidId(id_dataset);
     }
+
+    // ==========================================
+    // COLLECTION: PERFILES DE EMPLEO (POR USUARIO)
+    // ==========================================
+    function isValidEmploymentProfile(data) {
+      return data.keys().hasAll([
+               'uid',
+               'nombre',
+               'telefono',
+               'ciudad',
+               'experiencia',
+               'habilidades',
+               'educacion',
+               'disponibilidad',
+               'status',
+               'updatedAt'
+             ]) &&
+             data.uid is string &&
+             data.uid.size() <= 128 &&
+             data.nombre is string &&
+             data.nombre.size() > 0 &&
+             data.nombre.size() <= 120 &&
+             data.telefono is string &&
+             data.telefono.size() >= 8 &&
+             data.telefono.size() <= 20 &&
+             data.ciudad is string &&
+             data.ciudad.size() > 0 &&
+             data.ciudad.size() <= 120 &&
+             data.experiencia is string &&
+             data.experiencia.size() <= 4000 &&
+             data.habilidades is list &&
+             data.habilidades.size() <= 30 &&
+             data.educacion is string &&
+             data.educacion.size() <= 1000 &&
+             data.disponibilidad is string &&
+             data.disponibilidad.size() <= 100 &&
+             data.status in ['incompleto', 'completo', 'verificado'] &&
+             data.updatedAt is string &&
+             (!('cvUrl' in data) || (data.cvUrl is string && data.cvUrl.size() <= 500)) &&
+             (!('certificaciones' in data) || (data.certificaciones is string && data.certificaciones.size() <= 1500)) &&
+             (!('portafolio' in data) || (data.portafolio is string && data.portafolio.size() <= 500)) &&
+             (!('expectativaSalarial' in data) || (data.expectativaSalarial is string && data.expectativaSalarial.size() <= 120));
+    }
+
+    match /perfiles_empleo/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == uid && incoming().uid == uid && isValidEmploymentProfile(incoming());
+      allow update: if isSignedIn() &&
+                       request.auth.uid == uid &&
+                       existing().uid == uid &&
+                       incoming().uid == uid &&
+                       isValidEmploymentProfile(incoming());
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ==========================================
+    // COLLECTION: PUBLICACIONES DE EMPLEO (COLA)
+    // ==========================================
+    match /bolsa_empleo_publicaciones/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update: if isSignedIn() &&
+                               request.auth.uid == uid &&
+                               incoming().uid == uid &&
+                               incoming().plataforma is string &&
+                               incoming().status is string &&
+                               incoming().updatedAt is string;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
   }
 }
